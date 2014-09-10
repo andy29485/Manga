@@ -1,0 +1,5 @@
+GitPortable/
+*.txt
+list.xml
+*.sh
+*.bat
