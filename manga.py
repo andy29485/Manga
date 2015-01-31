@@ -43,7 +43,7 @@ tag_dict = {
   'Slice of Life':  'Nichijou'
 }
 calibredb_executable = 'calibredb'
-lib_path=''
+lib_path='/home/az/Pictures/.manga/Manga_LN'
 batoto_lang = 'English'
 
 #My own version of title case
@@ -193,7 +193,7 @@ def add_to_calibre(f_name, info):
     authors   =           'Unknown'
   
   if lib_path:
-    path = '--library-path {lib}'.format(lib_path)
+    path = ' --library-path \"{}\"'.format(lib_path)
   else:
     path = ''
   
@@ -201,22 +201,24 @@ def add_to_calibre(f_name, info):
   print('\r  Adding to Calibre                ')
   
   if args.debug:
-    print('    {command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" \"{f}\" --dont-notify-gui{lib}'.format(
+    print('    {command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\" --dont-notify-gui{lib}'.format(
       command=calibredb_executable,
       title=re.sub('([\"$])', '\\\\\\1', name),
       tags=re.sub('([\"$])', '\\\\\\1', tags),
       f=re.sub('([\"$])', '\\\\\\1', f_name),
       ser=re.sub('([\"$])', '\\\\\\1', series),
+      index=re.sub('([\"$])', '\\\\\\1', re.search('^.*?([\d]{2,3}\.\d+).*?$', name).group(1)),
       aut=re.sub('([\"$])', '\\\\\\1', authors),
       lib=path))
   
   #Add file to calibre - at this point only add tags to the meta data
-  book_id = os.popen('{command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" \"{f}\" --dont-notify-gui{lib}'.format(
+  book_id = os.popen('{command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\" --dont-notify-gui{lib}'.format(
     command=calibredb_executable,
     title=re.sub('([\"$])', '\\\\\\1', name),
     tags=re.sub('([\"$])', '\\\\\\1', tags),
     f=re.sub('([\"$])', '\\\\\\1', f_name),
     ser=re.sub('([\"$])', '\\\\\\1', series),
+      index=re.sub('([\"$])', '\\\\\\1', re.search('^.*?([\d]{2,3}\.\d+).*?$', name).group(1)),
     aut=re.sub('([\"$])', '\\\\\\1', authors),
     lib=path)).read()
   
@@ -249,44 +251,33 @@ def add_to_calibre(f_name, info):
 def save(links, dirName, img_type, image_links=False):
   for i in range(len(links)):
     img_name = '{}{:03}.{}'.format(dirName, i+1, img_type)
-    if not os.path.exists(img_name):
+    if not os.path.exists(img_name.replace('.jpg', '.png')) and not os.path.exists(img_name.replace('.png', '.jpg')):
       print('\r  Downloading {0} of {1}'.format(*(i+1, len(links))), end="")
       if image_links:
         img_url = links[i]
-      elif 'batoto.net' in links[i]:
-        img_url = re.search('<div.*?>\\s*<a.*?>\\s*<img[^<]*?src=\"([^\"]*?)\"[^>]*?/>\\s*</div>', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
+      elif 'bato.to' in links[i]:
+        img_url = re.search('<div.*?>\\s*<img[^<]*?src=\"([^\"]*?)\"[^>]*?/>\\s*</div>', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
       elif 'goodmanga.net' in links[i]:
         img_url = re.search('</div>\\s*<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
       else:
         img_url = re.search('<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
-      try:
-        for i in range(3):
+      for j in range(2):
+        for k in range(7):
           try:
             data = request(img_url)
             break
           except:
-            if i == 2:
-              raise
-            else:
-              pass
-      except:
-        if 'batoto' in img_url:
-          for i in range(3):
-            try:
+            if j == 0 and k == 6 and 'bato.to' in img_url:
               if img_url.endswith('png'):
-                data = request(re.sub('png$', 'jpg', img_url))
+                img_url = re.sub('png$', 'jpg', img_url)
                 img_name = '{}{:03}.{}'.format(dirName, i+1, 'jpg')
               else:
-                data = request(re.sub('jpg$', 'png', img_url))
+                img_url = re.sub('jpg$', 'png', img_url)
                 img_name = '{}{:03}.{}'.format(dirName, i+1, 'png')
-              break
-            except:
-              if i == 2:
-                raise
-              else:
-                pass
-        else:
-          raise
+            if j == 1 and k == 6:
+              raise
+            pass
+          time.sleep(1.7)
       with open(img_name, 'wb') as f:
         f.write(data)
   print()
@@ -678,7 +669,7 @@ def main():
           else:
             dest  = ''
       except:
-        print('ERROR - line 678\n\n\"{}\"'.format(item[0].replace('\n', '\\n').replace('\t', '\\t')))
+        print('ERROR - line 681\n\n\"{}\"'.format(item[0].replace('\n', '\\n').replace('\t', '\\t')))
         sys.exit(-1)
       print('URL - {}'.format(url))
     
@@ -686,7 +677,7 @@ def main():
         mangareader(url, download_chapters)
       elif 'mangahere.co' in url:
         mangahere(url, download_chapters)
-      elif 'batoto.net' in url:
+      elif 'bato.to' in url:
         batoto(url+'/', download_chapters)
       elif 'mangapanda.com' in url:
         mangapanda(url, download_chapters)
@@ -709,7 +700,7 @@ def main():
       mangareader(url, download_chapters)
     elif 'mangahere.co' in url:
       mangahere(url, download_chapters)
-    elif 'batoto.net' in url:
+    elif 'bato.to' in url:
       batoto(url+'/', download_chapters)
     elif 'mangapanda.com' in url:
       mangapanda(url, download_chapters)
