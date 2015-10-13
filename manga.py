@@ -465,7 +465,7 @@ def batoto(url, download_chapters):
         pass
   global last
   
-  series    = title(re.search('<h1.*?>\\s*(.*?)\\s*</h1>', html, re.DOTALL|re.MULTILINE).group(1))
+  series    = title(re.search('<h1.*?>[\\s\n]*(.*?)[\\s\n]*</h1>', html, re.DOTALL|re.MULTILINE).group(1))
   status    = re.search('<td.*?>Status:</td>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
   author    = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<td.*?>\\s*Authors?\\s*:?\\s*</td>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1)))
   tags      = re.findall('<a.*?>\\s*<span.*?>\\s*([A-Za-z]*?)\\s*</span>\\s*</a>', re.search('<td.*?>\\s*Genres?\\s*:?\\s*</td>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1))
@@ -478,7 +478,13 @@ def batoto(url, download_chapters):
     if j[0]  == batoto_lang:
       match  = re.search('<a href=\"(.*?)\">\\s*<img.*?>\\s*([^:<>]*)(\\s*:\\s*)?(.*?)\\s*</a>', j[1], re.DOTALL|re.MULTILINE)
       name   = match.group(4)
-      num    = float(re.search('[Cc]h(ap)?(ter)?\\.?\\s*([\\d\\.]+)', match.group(2)).group(3))
+      m2     = re.search('[Cc]h(ap)?(ter)?\\.?\\s*([Ee]xtra)?\\s*([\\d\\.]+)(-[\\d\\.]+)?', match.group(2))
+      num    = float(m2.group(4))
+      if m2.group(3):
+        if chapters:
+          num = chapters[-1]['num'] + .4
+        else:
+          num = last + .4
       try:
         vol  = int(re.search('[Vv]ol(ume)?\\.\\s*(\\d+)', match.group(2)).group(2))
       except:
@@ -527,7 +533,7 @@ def batoto(url, download_chapters):
       if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
         if args.debug or args.verbose:
           print('  Gathering info: \"{}\"'.format(name))
-        chap_html  = get_html(link)
+        chap_html = get_html(link)
         img_url   = re.sub('001\\.([A-Za-z]{3})', '{:03}.\\1', re.search('<div.*?>\\s*<a.*?>\\s*<img[^<]*?src=\"([^\"]*?)\"[^>]*?/>\\s*</div>', chap_html, re.DOTALL|re.MULTILINE).group(1))
         zero = False
         if '{:03}' not in img_url:
