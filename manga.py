@@ -294,9 +294,15 @@ def function_name(chapters, series, tags, author, status):
   
   tmpdir = tempfile.mkdtemp()+'/'
   
+  for i in re.findall('(&#(\\d*?);)', str(series)):
+    series = series.replace(i[0], chr(int(i[1])))
+  
   for chapter in chapters:
-    f_name =  '{}{}.cbz'.format(tmpdir, re.sub('[$&\\*<>:;/]', '_', chapter['name']))
+    for i in re.findall('(&#(\\d*?);)', str(chapter['name'])):
+      chapter['name'] = chapter['name'].replace(i[0], chr(int(i[1])))
+    
     print('  Downloading chapter - {}'.format(chapter['name']))
+    f_name  = '{}{}.cbz'.format(tmpdir, re.sub('[$&\\*<>:;/]', '_', chapter['name']))
     chapdir = tempfile.mkdtemp(dir=tmpdir)+'/'
     
     if args.debug or args.verbose:
