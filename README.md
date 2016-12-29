@@ -25,7 +25,9 @@ or the equivalet using your perfered(or default) package manager
 Command line opptions
 ====
 ```
-usage: manga.py [-h] [-x LIST] [-D] [-v] [-d DEST] [-a] [url] [chap]
+usage: manga.py [-h] [-x LIST] [-D] [-v] [-d DEST] [-a] [-u USERNAME]
+                [-p PASSWORD]
+                [url] [chap]
 
 positional arguments:
   url                   Url of page to download - do not combine with
@@ -38,10 +40,14 @@ optional arguments:
   -x LIST, --list LIST  Path to xml list containing data - default list.xml in
                         directory of this script
   -D, --debug           Print extra stuff(verbose) and don't remove temp dirs
-  -v, --verbose         Print extra stuff
+  -v, --verbose         Print extra stuff(verbose)
   -d DEST, --dest DEST  Directory to copy files to after download - default
                         nowhere - Only works if url is also specified
   -a, --add-to-calibre  Add book to calibre
+  -u USERNAME, --username USERNAME
+                        Batoto username
+  -p PASSWORD, --password PASSWORD
+                        Batoto password
 ```
 
 There are a few methods of getting this to work.
