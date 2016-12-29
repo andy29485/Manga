@@ -34,6 +34,9 @@ parser . add_argument('url',  nargs='?',                                type=str
 parser . add_argument('chap', nargs='?',                                type=str, help='Chaptes to download - Only works if url is also specified')
 args   = parser.parse_args()
 
+batoto_username = args.username
+batoto_password = args.password
+
 #TODO
 #Add support for following websites?
 #  http://www.mangago.com/
@@ -130,8 +133,16 @@ def check_pid(pid):
       return False
     return True
 
-def login(username=args.username, password=args.password):
-  global session
+def login(username=batoto_username, password=batoto_password):
+  global session,
+  if not username:
+    print('It seems like you want to use bato.to, but did not provide a' + \
+          'username or password')
+    global batoto_username
+    batoto_username = username = input('please enter your bato.to username: ')
+  if not password:
+   global batoto_password
+   batoto_password = password = input('please enter your bato.to password: ')
   url = "https://bato.to/forums/"
   html = get_html(url, set_head=True)
   auth_key = re.search('auth_key.*?value=[\'"]([^\'"]+)', html).group(1)
