@@ -134,7 +134,7 @@ def check_pid(pid):
     return True
 
 def login(username=batoto_username, password=batoto_password):
-  global session,
+  global session
   if not username:
     print('It seems like you want to use bato.to, but did not provide a' + \
           'username or password')
@@ -507,9 +507,12 @@ def batoto(url, download_chapters):
     if j[0]  == batoto_lang:
       match  = re.search('<a href=\"([^\"]*?)\".*?>\\s*<img.*?>\\s*([^\"<>]*)(\\s*:\\s*)?(.*?)\\s*</a>', j[1], re.DOTALL|re.MULTILINE)
       name   = match.group(4)
-      m2     = re.search('[Cc]h(ap)?(ter)?\\.?\\s*([Ee]xtra:?)?\\s*([\\d\\.]+)\\s*(-\\s*[\\d\\.]+)?', match.group(2))
+      m2     = re.search('[Cc]h(ap)?(ter)?\\.?\\s*([Ee]xtras?:?)?\\s*[\\.:-]?\\s*([\\d\\.,]+)?\\s*(-\\s*[\\d\\.]+)?', match.group(2))
       try:
-        num    = float(m2.group(4))
+        if m2.group(3):
+          num = 0
+        else:
+          num = float(m2.group(4).replace(',', '.'))
       except:
         if args.debug:
           print(j[1])
