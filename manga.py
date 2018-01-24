@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from os.path import expanduser
+import xml.etree.cElementTree as ET
 from datetime import datetime
 from requests import Session
 import urllib.request
@@ -22,20 +23,28 @@ error_file  = '{}/errors.txt'.format(current_dir)
 session     = Session()
 session.headers.update({'User-agent': 'Mozilla/5.0'})
 
+if os.path.exists(xml_list):
+  try:
+    tree = ET.parse(xml_list)
+  except:
+    try:
+      with open(xml_list, 'r') as f: lines = f.readlines()
+      lines.insert(1, '<xml>')
+      lines.append('</xml>')
+      with open(xml_list, 'w') as f: f.write('\n'.join(lines))
+      tree = ET.parse(xml_list)
+
 parser = argparse.ArgumentParser()
 parser . add_argument('-x', '--list',           default = xml_list,     type=str, help='Path to xml list containing data - default list.xml in directory of this script')
 parser . add_argument('-D', '--debug',          action  = 'store_true',           help='Print extra stuff(verbose) and don\'t remove temp dirs')
 parser . add_argument('-v', '--verbose',        action  = 'store_true',           help='Print extra stuff(verbose)')
 parser . add_argument('-d', '--dest',           default = '',           type=str, help='Directory to copy files to after download - default nowhere - Only works if url is also specified')
 parser . add_argument('-a', '--add-to-calibre', action  = 'store_true',           help='Add book to calibre')
-parser . add_argument('-u', '--username',       default = '',           type=str, help='Batoto username')
-parser . add_argument('-p', '--password',       default = '',           type=str, help='Batoto password')
+parser . add_argument('-u', '--username',       default = '',           type=str, help='MangaDex username')
+parser . add_argument('-p', '--password',       default = '',           type=str, help='MangaDex password')
 parser . add_argument('url',  nargs='?',                                type=str, help='Url of page to download - do not combine with -x/--list')
 parser . add_argument('chap', nargs='?',                                type=str, help='Chaptes to download - Only works if url is also specified')
 args   = parser.parse_args()
-
-batoto_username = args.username
-batoto_password = args.password
 
 #TODO
 #Add support for following websites?
@@ -52,7 +61,7 @@ tag_dict = {
 }
 calibredb_executable = 'calibredb'
 lib_path='/home/az/Pictures/.manga/Manga_LN'
-batoto_lang = 'English'
+lang = 'English'
 
 #My own version of title case
 #It's like regular title case but some
@@ -99,6 +108,14 @@ def get_html(url, set_head=False):
     '\\t'   , '\t').replace(
     '\\r'   , ''  )
 
+class Element(ET.Element):
+  def __init__(self, tag, text=None, tail=None, attrib={}, **extra):
+    super().__init__(tag, attrib, **extra)
+    if text:
+      self.text = text
+    if tail:
+      self.tail = tail
+
 #Zips directory int a file called zip_file
 def zipper(dirName, zip_file):
   zip = zipfile.ZipFile(zip_file, 'w', compression=zipfile.ZIP_DEFLATED)
@@ -133,16 +150,22 @@ def check_pid(pid):
       return False
     return True
 
-def login(username=batoto_username, password=batoto_password):
+def login_batoto(username=None, password=None):
   global session
+  global tree
+
+  if not username:
+    username = args.username or (root.find('batot') or {}).get('username')
+  if not password:
+    password = args.password or (root.find('batot') or {}).get('password')
+
   if not username:
     print('It seems like you want to use bato.to, but did not provide a' + \
           'username or password')
-    global batoto_username
-    batoto_username = username = input('please enter your bato.to username: ')
+    username = input('please enter your bato.to username: ')
   if not password:
-   global batoto_password
-   batoto_password = password = input('please enter your bato.to password: ')
+   password = input('please enter your bato.to password: ')
+
   url = "https://bato.to/forums/"
   html = get_html(url, set_head=True)
   auth_key = re.search('auth_key.*?value=[\'"]([^\'"]+)', html).group(1)
@@ -159,6 +182,42 @@ def login(username=batoto_username, password=batoto_password):
   r = session.post(url, data=fields)
   if 'set-cookie' in r.headers:
     session.headers.update({'cookie':r.headers['set-cookie']})
+    return True
+  else:
+    return False #Login failed
+
+
+def login_mangadex(username=None, password=None):
+  global session
+  global tree
+  root   = tree.getroot()
+  config = (root.find('mangadex') if root else None) or {}
+
+  if not username:
+    username = args.username or config.get('username')
+  if not password:
+    password = args.password or config.get('password')
+
+  if not username or not password:
+    print('It seems like you want to use mangadex, but did not provide a' + \
+          'username or password')
+    username = input('please enter your mangadex username: ')
+    password = input('please enter your mangadex password: ')
+    if root and not config:
+      root.append(Element('mangadex', username=username, password=password))
+    elif config:
+      config.set('username', username)
+      config.set('password', password)
+
+  url = 'https://mangadex.com/ajax/actions.ajax.php?function=login'
+  fields = {
+    'remember_me'    : 1,
+    'login_username' : username,
+    'login_password' : password,
+  }
+  r = session.post(url, data=fields)
+  if 'set-cookie' in r.headers:
+    session.headers.update({'cookie':r.headers.get('set-cookie','')]})
     return True
   else:
     return False #Login failed
@@ -478,8 +537,9 @@ def mangahere(url, download_chapters):
   if chapters:
     function_name(chapters, series, tags, author, status)
 
-def batoto(url, download_chapters):
-  login()
+
+def mangadex(url, download_chapters):
+  login_mangadex()
   for i in range(3):
     try:
       html  = get_html(url+'/')
@@ -608,6 +668,102 @@ def batoto(url, download_chapters):
   if chapters:
     function_name(chapters, series, tags, author, status)
 
+
+def batoto(url, download_chapters):
+  login_batoto()
+  for i in range(3):
+    try:
+      html  = get_html(url+'/')
+      break
+    except:
+      if i == 2:
+        raise
+      else:
+        pass
+
+  global last
+  global session
+
+  series    = title(re.sub('<[^>]+>', '', re.search('<h3 class="panel-title">(.*)</h3>', html).group(1)).strip())
+  status    = re.search('<th.*?>Status:</th>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
+  author    = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<th.*?>\\s*Authors?\\s*:?\\s*</th>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1)))
+  tags      = re.findall(r'<span.*?>\s*<a.*?>\s*([A-Za-z]*?)\s*</a>\s*</span>', re.search(r'<th.*?>\s*Genres?\s*:?\s*</th>\s*<td>(.*?)</td>', html.replace('\n', '')).group(1))
+  for j in range(len(tags)):
+    for k in tag_dict:
+      tags[j] = re.sub(k, tag_dict[k], tags[j])
+
+  chapters  = []
+
+  for j in re.findall(r'<tr.*?>\s*(.*?/chapter/.*?)\s*</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
+    if == 'title="{}"'.format(batoto_lang) in j:
+      match  = re.search(r'<a href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
+      m2     = re.search('[Cc]h(ap)?(ter)?\\.?\\s*([Ee]xtras?:?)?\\s*[\\.:-]?\\s*([\\d\\.,]+)?\\s*(-\\s*[\\d\\.]+)?', match.group(2))
+      name   = match.group(2).replace(m2.group(0), '')
+      try:
+        if m2.group(3):
+          num = 0
+        else:
+          num = float(m2.group(4).replace(',', '.'))
+      except:
+        if args.debug:
+          print(j)
+        raise
+
+      '''
+      #TODO
+      if m2.group(3):
+        if chapters:
+          num = chapters[-1]['num'] + .4
+        else:
+          num = last + .4
+      '''
+      try:
+        vol  = re.search('[Vv]ol(ume)?\\.\\s*(\\d+)', match.group(2))
+        vol  = int(vol.group(2))
+        name = name.replace(vol.group(0), '').strip()
+      except:
+        vol  = 0
+      link   = 'https://mangadex.com/{}/'.format(match.group(1))
+
+      try:
+        date = re.search('datetime=\"(.*?)( [A-Z]{3})?\"', j).group(1).replace(' ', 'T')
+
+      if name:
+        name = '{} - {} : {}'.format(series, '{:3.1f}'.format(num).zfill(5), name)
+      else:
+        name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
+
+      if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
+        if args.debug or args.verbose:
+          print('  Gathering info: \"{}\"'.format(name))
+        chap_html = get_html(link+'1')
+        img_url   = re.sub('/1\\.([A-Za-z]{3})$', '/{}.\\1', re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1))
+        zero = False
+        if '{}' not in img_url:
+          img_url  = re.sub(r'/0\.([a-zA-Z]{3}))', '/{}.\\1', img_url)
+          zero = True
+          if '{}' not in img_url:
+            img_url  = re.sub(r'/01\.([a-zA-Z]{3}))', '{:02}.\\1', img_url)
+            zero = False
+            if '{:02}' not in img_url:
+              img_url  = re.sub('00\\.([A-Za-z]{3})', '{:02}.\\1', img_url)
+              zero = True
+        if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)
+          pages = max([int(i) for i in re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)])
+        else:
+          continue
+        b_links = {float(i[1]):link+i[0] for i in re.findall(r'<option[^>]+value=[\"\'](.*?)[\'\"].*?>Page (\d+)</option>', chap_html)}
+        b_links = [b_links[i+1] for i in range(pages)]
+        if zero:
+          links = [img_url.format(i) for i in range(pages)]
+        else:
+          links = [img_url.format(i+1) for i in range(pages)]
+
+        chapters.append({'name':name, 'links':links, 'backup_links':b_links, 'date':date, 'pages':pages, 'num':num})
+
+  if chapters:
+    function_name(chapters, series, tags, author, status)
+
 def mangapanda(url, download_chapters):
   html  = get_html(url)
   global last
@@ -694,16 +850,12 @@ def goodmanga(url, download_chapters):
     function_name(chapters, series, tags, author, status)
 
 def main():
-  global xml_list
+  global tree
   global entry
   global last
   global dest
   global url
   global session
-
-  if not args.url:
-    with open(args.list, 'r') as f:
-      xml_list  = f.read()
 
   download_chapters = []
   if args.chap:
@@ -716,18 +868,18 @@ def main():
     download_chapters = sorted(list(set([float(j) for j in download_chapters])))
 
   if not args.url:
-    for item in re.findall('(\n?<entry>\\s*(.*?)\\s*</entry>)', xml_list, re.DOTALL|re.MULTILINE):
+    for item in tree.getroot().iterfind('entry'):
       session = Session()
       session.headers.update({'User-agent': 'Mozilla/5.0'})
-      entry = item[1]
       try:
-        url       = re.search('<url>(.*?)</url>',                  entry, re.DOTALL|re.MULTILINE).group(1).strip()
+        url       = entry.find('url').text.strip()
         try:
-          last    = float(re.search('<last>\\s*([\\d.,-]+)\\s*</last>',  entry, re.DOTALL|re.MULTILINE).group(1))
+          last    = float(entry.find('last').text)
         except:
+          entry.append(Element('last', text='-1'))
           last    = -1
         try:
-          dest    = re.search('<destination>(.*?)</destination>',  entry, re.DOTALL|re.MULTILINE).group(1)
+          dest    = entry.find('destination').text
         except:
           if not args.add_to_calibre:
             dest  = './'
@@ -738,7 +890,9 @@ def main():
         sys.exit(-1)
       print('URL - {}'.format(url))
 
-      if 'mangareader.net' in url:
+      if 'mangadex.com' in url:
+        mangadex(url, download_chapters)
+      elif 'mangareader.net' in url:
         mangareader(url, download_chapters)
       elif 'mangahere.co' in url:
         mangahere(url, download_chapters)
@@ -749,8 +903,7 @@ def main():
       elif 'goodmanga.net' in url:
         goodmanga(url, download_chapters)
 
-      with open(args.list, 'w') as f:
-        f.write(xml_list)
+      tree.write(xml_list)
   else:
     if args.dest:
       dest = args.dest
@@ -761,7 +914,10 @@ def main():
     url = args.url
     if not download_chapters:
       last = -1
-    if 'mangareader.net' in url:
+
+    if 'mangadex.com' in url:
+      mangadex(url, download_chapters)
+    elif 'mangareader.net' in url:
       mangareader(url, download_chapters)
     elif 'mangahere.co' in url:
       mangahere(url, download_chapters)
