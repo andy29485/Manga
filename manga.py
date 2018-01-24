@@ -27,12 +27,11 @@ if os.path.exists(xml_list):
   try:
     tree = ET.parse(xml_list)
   except:
-    try:
-      with open(xml_list, 'r') as f: lines = f.readlines()
-      lines.insert(1, '<xml>')
-      lines.append('</xml>')
-      with open(xml_list, 'w') as f: f.write('\n'.join(lines))
-      tree = ET.parse(xml_list)
+    with open(xml_list, 'r') as f: lines = f.readlines()
+    lines.insert(1, '<xml>')
+    lines.append('</xml>')
+    with open(xml_list, 'w') as f: f.write('\n'.join(lines))
+    tree = ET.parse(xml_list)
 
 parser = argparse.ArgumentParser()
 parser . add_argument('-x', '--list',           default = xml_list,     type=str, help='Path to xml list containing data - default list.xml in directory of this script')
@@ -217,7 +216,7 @@ def login_mangadex(username=None, password=None):
   }
   r = session.post(url, data=fields)
   if 'set-cookie' in r.headers:
-    session.headers.update({'cookie':r.headers.get('set-cookie','')]})
+    session.headers.update({'cookie':r.headers.get('set-cookie','')})
     return True
   else:
     return False #Login failed
@@ -695,7 +694,7 @@ def batoto(url, download_chapters):
   chapters  = []
 
   for j in re.findall(r'<tr.*?>\s*(.*?/chapter/.*?)\s*</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
-    if == 'title="{}"'.format(batoto_lang) in j:
+    if 'title="{}"'.format(batoto_lang) in j:
       match  = re.search(r'<a href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
       m2     = re.search('[Cc]h(ap)?(ter)?\\.?\\s*([Ee]xtras?:?)?\\s*[\\.:-]?\\s*([\\d\\.,]+)?\\s*(-\\s*[\\d\\.]+)?', match.group(2))
       name   = match.group(2).replace(m2.group(0), '')
@@ -725,8 +724,7 @@ def batoto(url, download_chapters):
         vol  = 0
       link   = 'https://mangadex.com/{}/'.format(match.group(1))
 
-      try:
-        date = re.search('datetime=\"(.*?)( [A-Z]{3})?\"', j).group(1).replace(' ', 'T')
+      date = re.search('datetime=\"(.*?)( [A-Z]{3})?\"', j).group(1).replace(' ', 'T')
 
       if name:
         name = '{} - {} : {}'.format(series, '{:3.1f}'.format(num).zfill(5), name)
@@ -748,7 +746,7 @@ def batoto(url, download_chapters):
             if '{:02}' not in img_url:
               img_url  = re.sub('00\\.([A-Za-z]{3})', '{:02}.\\1', img_url)
               zero = True
-        if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)
+        if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html):
           pages = max([int(i) for i in re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)])
         else:
           continue
@@ -886,7 +884,6 @@ def main():
           else:
             dest  = ''
       except:
-        print('ERROR - line 681\n\n\"{}\"'.format(item[0].replace('\n', '\\n').replace('\t', '\\t')))
         sys.exit(-1)
       print('URL - {}'.format(url))
 
