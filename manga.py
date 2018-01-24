@@ -22,6 +22,9 @@ xml_list    = os.path.join(current_dir, 'list.xml')
 session     = Session()
 session.headers.update({'User-agent': 'Mozilla/5.0'})
 
+if not os.path.exists(os.path.join(current_dir, 'logs')):
+  os.mkdir(os.path.join(current_dir, 'logs'))
+
 # logging stuff
 logger = logging.getLogger('manga')
 logger.setLevel(logging.INFO)
@@ -308,7 +311,7 @@ def add_to_calibre(f_name, info):
   #The extra white space is to remove the previose message
   logger.info('\r  Adding to Calibre                ')
 
-  logger.debug('    {command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\" --dont-notify-gui{lib}'.format(
+  logger.debug('    {command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\"{lib}'.format(
       command=calibredb_executable,
       title=re.sub('([\"$])', '\\\\\\1', name),
       tags=re.sub('([\"$])', '\\\\\\1', tags),
@@ -319,7 +322,7 @@ def add_to_calibre(f_name, info):
       lib=path))
 
   #Add file to calibre - at this point only add tags to the meta data
-  book_id = os.popen('{command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\" --dont-notify-gui{lib}'.format(
+  book_id = os.popen('{command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\"{lib}'.format(
     command=calibredb_executable,
     title=re.sub('([\"$])', '\\\\\\1', name),
     tags=re.sub('([\"$])', '\\\\\\1', tags),
@@ -331,7 +334,7 @@ def add_to_calibre(f_name, info):
 
   book_id = re.search('ids:\\s*(\\d+)', book_id).group(1)
 
-  logger.debug('    {command} set_metadata -f \"#read:false\" -f \"pubdate:{date}\" -f\"#aut:{aut}\" -f \"#pages:{pages}\" {bid} --dont-notify-gui{lib}'.format(
+  logger.debug('    {command} set_metadata -f \"#read:false\" -f \"pubdate:{date}\" -f\"#aut:{aut}\" -f \"#pages:{pages}\" {bid}{lib}'.format(
     command=calibredb_executable,
     date=date,
     pages=pages,
@@ -341,7 +344,7 @@ def add_to_calibre(f_name, info):
   )
 
   #Add all other meta data - authors, pages, characters(pururin only), and series
-  verbose = os.popen('{command} set_metadata -f \"#read:false\" -f \"pubdate:{date}\" -f\"#aut:{aut}\" -f \"#pages:{pages}\" {bid} --dont-notify-gui{lib}'.format(
+  verbose = os.popen('{command} set_metadata -f \"#read:false\" -f \"pubdate:{date}\" -f\"#aut:{aut}\" -f \"#pages:{pages}\" {bid}{lib}'.format(
     command=calibredb_executable,
     date=date,
     pages=pages,
@@ -376,29 +379,31 @@ def save(links, dirName, img_type, image_links=False):
 
       logger.debug('Downloading(%s) %s', 'T' if image_links else 'F', img_url)
 
-      for j in range(2):
-        for k in range(7):
-          try:
-            r = request(img_url)
-            if r.status_code != 200:
-              raise NameError('No data')
-            data = r.content
-            break
-          except:
-            if k % 2 == 1 and 'bato.to' in img_url:
-              if img_url.endswith('png'):
-                img_url = re.sub('png$', 'jpg', img_url)
-                img_name = '{}{:03}.{}'.format(dirName, i+1, 'jpg')
-              else:
-                img_url = re.sub('jpg$', 'png', img_url)
-                img_name = '{}{:03}.{}'.format(dirName, i+1, 'png')
-            if j == 1 and k == 6:
-              if 'mangadex' in img_url:
-                dec += 1
-                continue
-              raise
-            pass
-          time.sleep(1.7)
+      for k in range(7):
+        try:
+          r = request(img_url)
+          if r.status_code != 200:
+            raise NameError('No data')
+          data = r.content
+          break
+        except:
+          if k % 2 == 1 and 'bato.to' in img_url:
+            if img_url.endswith('png'):
+              img_url = re.sub('png$', 'jpg', img_url)
+              img_name = '{}{:03}.{}'.format(dirName, i+1, 'jpg')
+            else:
+              img_url = re.sub('jpg$', 'png', img_url)
+              img_name = '{}{:03}.{}'.format(dirName, i+1, 'png')
+          if k == 6:
+            if 'mangadex' in img_url:
+              data = None
+              break
+            raise
+          pass
+        time.sleep(1.7)
+      if not data:
+        dec += 1
+        continue
       with open(img_name, 'wb') as f:
         f.write(data)
   print()
@@ -478,6 +483,8 @@ def function_name(chapters, series, tags, author, status):
         if url in elem.find('url').text: break
       else:
         raise NameError('could not find entry')
+      if url != elem.find('url').text:
+        elem.find('url').text = url
       if elem.find('last'):
         elem.find('last').text = str(l)
       else:
@@ -720,6 +727,8 @@ def batoto(url, download_chapters):
 
 def mangadex(url, download_chapters):
   login_mangadex()
+  if url.endswith('/'):
+    url = re.sub('/+$', '', url)
   for i in range(3):
     try:
       html  = get_html(url)
@@ -791,7 +800,7 @@ def mangadex(url, download_chapters):
         chap_html = get_html(link+'1')
         img_url   = re.sub('/1\\.([A-Za-z]{3})$', '/{}.\\1', re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1))
         if 'http' not in img_url:
-          img_url += 'https://mangadex.com/'
+          img_url = 'https://mangadex.com/' + img_url
         zero = False
         if '{}' not in img_url:
           img_url  = re.sub(r'/0\.([a-zA-Z]{3}))', '/{}.\\1', img_url)
@@ -932,7 +941,6 @@ def main():
       try:
         last   = float(entry.find('last').text.strip())
       except:
-        entry.append(Element('last', text='-1'))
         last   = -1
 
       try:
