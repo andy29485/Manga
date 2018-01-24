@@ -18,12 +18,29 @@ import re
 
 current_dir = os.path.realpath(os.path.dirname(os.path.realpath(sys.argv[0])))
 
-xml_list    = '{}/list.xml'.format(current_dir)
-error_file  = '{}/errors.txt'.format(current_dir)
+xml_list    = os.path.join(current_dir, 'list.xml')
 session     = Session()
 session.headers.update({'User-agent': 'Mozilla/5.0'})
 
+# logging stuff
+logger = logging.getLogger('manga')
+logger.setLevel(logging.INFO)
+logformat = logging.Formatter(
+  '%(asctime)s:%(name)s:%(levelname)s(%(pathname)s:%(lineno)s) - %(message)s'
+)
+error_log = logging.FileHandler(os.path.join(current_dir, 'logs/error.log'))
+error_log.setFormatter(logformat)
+error_log.setLevel(logging.ERROR)
+
+fh = logging.FileHandler(os.path.join(current_dir, 'logs/manga.log'))
+fh.setFormatter(logformat)
+fh.setLevel(logging.DEBUG)
+
+logger.addHandler(error_log)
+logger.addHandler(fh)
+
 if os.path.exists(xml_list):
+  global tree
   try:
     tree = ET.parse(xml_list)
   except:
@@ -35,7 +52,7 @@ if os.path.exists(xml_list):
 
 parser = argparse.ArgumentParser()
 parser . add_argument('-x', '--list',           default = xml_list,     type=str, help='Path to xml list containing data - default list.xml in directory of this script')
-parser . add_argument('-D', '--debug',          action  = 'store_true',           help='Print extra stuff(verbose) and don\'t remove temp dirs')
+parser . add_argument('-D', '--debug',          action  = 'store_true',           help='log extra info and don\'t remove temp dirs')
 parser . add_argument('-v', '--verbose',        action  = 'store_true',           help='Print extra stuff(verbose)')
 parser . add_argument('-d', '--dest',           default = '',           type=str, help='Directory to copy files to after download - default nowhere - Only works if url is also specified')
 parser . add_argument('-a', '--add-to-calibre', action  = 'store_true',           help='Add book to calibre')
@@ -54,6 +71,15 @@ args   = parser.parse_args()
 #Allow multiple urls(sites) for same manga?
 #
 #Creae support for chaper urls - rather than series?
+
+if args.debug:
+  logger.setLevel(logging.DEBUG)
+
+if args.verbose:
+  sh = logging.StreamHandler()
+  sh.setLevel(logging.DEBUG)
+  sh.setFormatter(logformat)
+  logger.addHandler(sh)
 
 tag_dict = {
   'Slice of Life':  'Nichijou'
@@ -160,7 +186,7 @@ def login_batoto(username=None, password=None):
 
   if not username:
     print('It seems like you want to use bato.to, but did not provide a' + \
-          'username or password')
+          ' username or password')
     username = input('please enter your bato.to username: ')
   if not password:
    password = input('please enter your bato.to password: ')
@@ -190,7 +216,9 @@ def login_mangadex(username=None, password=None):
   global session
   global tree
   root   = tree.getroot()
-  config = (root.find('mangadex') if root else None) or {}
+  config = root.find('mangadex') if root else {}
+  if config is None:
+    config = {}
 
   if not username:
     username = args.username or config.get('username')
@@ -199,7 +227,7 @@ def login_mangadex(username=None, password=None):
 
   if not username or not password:
     print('It seems like you want to use mangadex, but did not provide a' + \
-          'username or password')
+          ' username or password')
     username = input('please enter your mangadex username: ')
     password = input('please enter your mangadex password: ')
     if root and not config:
@@ -278,10 +306,9 @@ def add_to_calibre(f_name, info):
     path = ''
 
   #The extra white space is to remove the previose message
-  print('\r  Adding to Calibre                ')
+  logger.info('\r  Adding to Calibre                ')
 
-  if args.debug:
-    print('    {command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\" --dont-notify-gui{lib}'.format(
+  logger.debug('    {command} add -d -t \"{title}\" -T \"{tags}\" -a \"{aut}\" -s \"{ser}\" -S \"{index}\" \"{f}\" --dont-notify-gui{lib}'.format(
       command=calibredb_executable,
       title=re.sub('([\"$])', '\\\\\\1', name),
       tags=re.sub('([\"$])', '\\\\\\1', tags),
@@ -304,14 +331,14 @@ def add_to_calibre(f_name, info):
 
   book_id = re.search('ids:\\s*(\\d+)', book_id).group(1)
 
-  if args.debug:
-    print('    {command} set_metadata -f \"#read:false\" -f \"pubdate:{date}\" -f\"#aut:{aut}\" -f \"#pages:{pages}\" {bid} --dont-notify-gui{lib}'.format(
-      command=calibredb_executable,
-      date=date,
-      pages=pages,
-      bid=book_id,
-      aut=re.sub('([\"$])', '\\\\\\1', authors),
-      lib=path))
+  logger.debug('    {command} set_metadata -f \"#read:false\" -f \"pubdate:{date}\" -f\"#aut:{aut}\" -f \"#pages:{pages}\" {bid} --dont-notify-gui{lib}'.format(
+    command=calibredb_executable,
+    date=date,
+    pages=pages,
+    bid=book_id,
+    aut=re.sub('([\"$])', '\\\\\\1', authors),
+    lib=path)
+  )
 
   #Add all other meta data - authors, pages, characters(pururin only), and series
   verbose = os.popen('{command} set_metadata -f \"#read:false\" -f \"pubdate:{date}\" -f\"#aut:{aut}\" -f \"#pages:{pages}\" {bid} --dont-notify-gui{lib}'.format(
@@ -320,27 +347,35 @@ def add_to_calibre(f_name, info):
     pages=pages,
     bid=book_id,
     aut=re.sub('([\"$])', '\\\\\\1', authors),
-    lib=path)).read()
+    lib=path)
+  ).read()
 
-  if args.debug or args.verbose:
-    print('    Info:\n{}'.format(re.sub('(^|\n)', '\\1      ', verbose.strip())))
+  logger.debug('    Info:\n{}'.format(re.sub('(^|\n)', '\\1      ', verbose.strip())))
 
   #Open up process for others
   os.remove(pid_file)
 
 def save(links, dirName, img_type, image_links=False):
+  dec = 0
   for i in range(len(links)):
-    img_name = '{}{:03}.{}'.format(dirName, i+1, img_type)
+    img_name = '{}{:03}.{}'.format(dirName, i+1-dec, img_type)
     if not os.path.exists(img_name.replace('.jpg', '.png')) and not os.path.exists(img_name.replace('.png', '.jpg')):
-      print('\r  Downloading {0} of {1}'.format(*(i+1, len(links))), end="")
+      print('\r  Downloading {0} of {1}'.format(i+1-dec, len(links)-dec), end="")
       if image_links:
         img_url = links[i]
+      elif 'mangadex' in links[i]:
+        img_url = re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
+        if 'http' not in img_url:
+          img_url = 'https://mangadex.com/'+img_url
       elif 'bato.to' in links[i]:
         img_url = re.search('<div.*?>\\s*<img[^<]*?src=\"([^\"]*?)\"[^>]*?/>\\s*</div>', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
       elif 'goodmanga.net' in links[i]:
         img_url = re.search('</div>\\s*<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
       else:
         img_url = re.search('<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', get_html(links[i]), re.DOTALL|re.MULTILINE).group(1)
+
+      logger.debug('Downloading(%s) %s', 'T' if image_links else 'F', img_url)
+
       for j in range(2):
         for k in range(7):
           try:
@@ -358,6 +393,9 @@ def save(links, dirName, img_type, image_links=False):
                 img_url = re.sub('jpg$', 'png', img_url)
                 img_name = '{}{:03}.{}'.format(dirName, i+1, 'png')
             if j == 1 and k == 6:
+              if 'mangadex' in img_url:
+                dec += 1
+                continue
               raise
             pass
           time.sleep(1.7)
@@ -367,7 +405,7 @@ def save(links, dirName, img_type, image_links=False):
 
 #I'm calling this function name because I can't think of a better name for it
 def function_name(chapters, series, tags, author, status):
-  global xml_list
+  global tree
   global entry
   global last
   global dest
@@ -375,6 +413,10 @@ def function_name(chapters, series, tags, author, status):
 
   l = 0
 
+  logger.debug(
+    'getting:\n  chapters: %s\n  series: %s\n  tags: %s\n  author: %s\n  status: %s',
+    chapters, series, tags, author, status
+  )
   tmpdir = tempfile.mkdtemp()+'/'
 
   for i in re.findall('(&#(\\d*?);)', str(series)):
@@ -384,12 +426,11 @@ def function_name(chapters, series, tags, author, status):
     for i in re.findall('(&#(\\d*?);)', str(chapter['name'])):
       chapter['name'] = chapter['name'].replace(i[0], chr(int(i[1])))
 
-    print('  Downloading chapter - {}'.format(chapter['name']))
+    logger.info('  Downloading chapter - {}'.format(chapter['name']))
     f_name  = '{}{}.cbz'.format(tmpdir, re.sub('[$&\\*<>:;/]', '_', chapter['name']))
     chapdir = tempfile.mkdtemp(dir=tmpdir)+'/'
 
-    if args.debug or args.verbose:
-      print('  Chapdir - \"{}\"'.format(chapdir))
+    logger.info('  Chapdir - \"{}\"'.format(chapdir))
 
     try:
       if len(list(set(chapter['links']))) <= 1:
@@ -402,10 +443,12 @@ def function_name(chapters, series, tags, author, status):
     except:
       try:
         print('\r  Slight problem - will use backup solution(may be a bit slower)')
-        save(chapter['backup_links'], chapdir, re.search('<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', get_html(chapter['backup_links'][0]), re.DOTALL|re.MULTILINE).group(1).rpartition('.')[2][:3])
+        if 'mangadex' in chapter['backup_links'][0]:
+          save(chapter['backup_links'], chapdir, re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', get_html(chapter['backup_links'][0]), re.DOTALL|re.MULTILINE).group(1).rpartition('.')[2][:3])
+        else:
+          save(chapter['backup_links'], chapdir, re.search('<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', get_html(chapter['backup_links'][0]), re.DOTALL|re.MULTILINE).group(1).rpartition('.')[2][:3])
       except:
-        with open(error_file, 'a') as f:
-          f.write('Series: \"{}\"\nChapter: {}\n\n'.format(series, '{:3.1f}'.format(chapter['num']).zfill(5)))
+        logger.exception('Series: \"{}\"\nChapter: {}\n\n'.format(series, '{:3.1f}'.format(chapter['num']).zfill(5)))
         print('\n  Failure')
         shutil.rmtree(tmpdir)
         raise
@@ -429,10 +472,16 @@ def function_name(chapters, series, tags, author, status):
 
     if not args.debug:
       shutil.rmtree(chapdir)
-    print()
+    logger.debug('NOT deleting chapdir: \"%s\"', chapdir)
     if not args.url:
-      xml_list = xml_list.replace(entry, '<url>{url}</url>\n\t<last>{last}</last>'.format(url=url, last=l))
-      entry    = '<url>{url}</url>\n\t<last>{last}</last>'.format(url=url, last=l)
+      for elem in tree.getroot().iterfind('entry'):
+        if url in elem.find('url').text: break
+      else:
+        raise NameError('could not find entry')
+      if elem.find('last'):
+        elem.find('last').text = str(l)
+      else:
+        elem.append(Element('last', text=str(l)))
 
   if not args.debug:
     try:
@@ -440,20 +489,25 @@ def function_name(chapters, series, tags, author, status):
     except:
       print()
       shutil.rmtree(tmpdir)
+  logger.debug('NOT deleting tmpdir: \"%s\"', chapdir)
 
   if not args.url:
     if status != 'Completed':
       if l > last:
         last = l
-      print('   last downloaded chapther = {} or {}'.format(l, last))
-      xml_list = xml_list.replace(entry, '<url>{url}</url>\n\t<last>{last}</last>'.format(url=url, last=last))
-      entry    = '<url>{url}</url>\n\t<last>{last}</last>'.format(url=url, last=last)
+      for elem in tree.getroot().iterfind('entry'):
+        if url in elem.find('url').text: break
+      else:
+        raise NameError('could not find entry')
+      if elem.find('last'):
+        elem.find('last').text = str(l)
+      else:
+        elem.append(Element('last', text=str(l)))
     else:
-      xml_list = xml_list.replace(item[0], '')
+      tree.getroot().remove(elem)
 
   if not args.url:
-    with open(args.list, 'w') as f:
-      f.write(xml_list)
+    tree.write(xml_list)
 
 def mangareader(url, download_chapters):
   html  = get_html(url)
@@ -482,8 +536,7 @@ def mangareader(url, download_chapters):
       name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
 
     if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
-      if args.debug or args.verbose:
-        print('  Gathering info: \"{}\"'.format(name))
+      logger.info('  Gathering info: \"{}\"'.format(name))
       chap_html = get_html(link)
       links     = ['http://www.mangareader.net' + i for i in re.findall('<option value=\"(.*?)\".*?>\\d+</option>', chap_html)]
       chapters.append({'name':name, 'links':links, 'backup_links':links, 'date':date, 'pages':len(links), 'num':num})
@@ -520,11 +573,10 @@ def mangahere(url, download_chapters):
       name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
 
     if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
-      if args.debug or args.verbose:
-        print('  Gathering info: \"{}\"'.format(name))
+      logger.info('  Gathering info: \"{}\"'.format(name))
       chap_html  = get_html(link)
       img_url   = re.sub('001.([A-Za-z]{3})', '{:03}.\\1', re.search('<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', chap_html, re.DOTALL|re.MULTILINE).group(1))
-      if '{:03}' not in img_url:
+      if '{:03}' not in img_url and '{}' not in img_url:
         img_url   = re.sub('01.([A-Za-z]{3})', '{:02}.\\1', img_url)
       pages     = max([int(i) for i in re.findall('<option value=\".*?\".*?>(\\d+)</option>', chap_html)])
       b_links    = {float(i[1]):i[0] for i in re.findall('<option value=\"(.*?)\".*?>(\\d+)</option>', chap_html)}
@@ -537,8 +589,8 @@ def mangahere(url, download_chapters):
     function_name(chapters, series, tags, author, status)
 
 
-def mangadex(url, download_chapters):
-  login_mangadex()
+def batoto(url, download_chapters):
+  login_batoto()
   for i in range(3):
     try:
       html  = get_html(url+'/')
@@ -563,7 +615,7 @@ def mangadex(url, download_chapters):
   chapters  = []
 
   for j in re.findall('<tr class=\"row lang_([A-Za-z]*?) chapter_row\".*?>(.*?)</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
-    if j[0]  == batoto_lang:
+    if j[0]  == lang:
       match  = re.search('<a href=\"([^\"]*?)\".*?>\\s*<img.*?>\\s*([^\"<>]*)(\\s*:\\s*)?(.*?)\\s*</a>', j[1], re.DOTALL|re.MULTILINE)
       name   = match.group(4)
       m2     = re.search('[Cc]h(ap)?(ter)?\\.?\\s*([Ee]xtras?:?)?\\s*[\\.:-]?\\s*([\\d\\.,]+)?\\s*(-\\s*[\\d\\.]+)?', match.group(2))
@@ -573,8 +625,7 @@ def mangadex(url, download_chapters):
         else:
           num = float(m2.group(4).replace(',', '.'))
       except:
-        if args.debug:
-          print(j[1])
+        logger.debug(j[1])
         raise
 
       '''
@@ -637,8 +688,7 @@ def mangadex(url, download_chapters):
         name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
 
       if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
-        if args.debug or args.verbose:
-          print('  Gathering info: \"{}\"'.format(name))
+        logger.info('  Gathering info: \"{}\"'.format(name))
         chap_html = get_html(link)
         img_url   = re.sub('001\\.([A-Za-z]{3})', '{:03}.\\1', re.search('<div.*?>\\s*<a.*?>\\s*<img[^<]*?src=\"([^\"]*?)\"[^>]*?/>\\s*</div>', chap_html, re.DOTALL|re.MULTILINE).group(1))
         zero = False
@@ -668,11 +718,11 @@ def mangadex(url, download_chapters):
     function_name(chapters, series, tags, author, status)
 
 
-def batoto(url, download_chapters):
-  login_batoto()
+def mangadex(url, download_chapters):
+  login_mangadex()
   for i in range(3):
     try:
-      html  = get_html(url+'/')
+      html  = get_html(url)
       break
     except:
       if i == 2:
@@ -683,29 +733,34 @@ def batoto(url, download_chapters):
   global last
   global session
 
-  series    = title(re.sub('<[^>]+>', '', re.search('<h3 class="panel-title">(.*)</h3>', html).group(1)).strip())
-  status    = re.search('<th.*?>Status:</th>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
-  author    = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<th.*?>\\s*Authors?\\s*:?\\s*</th>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1)))
-  tags      = re.findall(r'<span.*?>\s*<a.*?>\s*([A-Za-z]*?)\s*</a>\s*</span>', re.search(r'<th.*?>\s*Genres?\s*:?\s*</th>\s*<td>(.*?)</td>', html.replace('\n', '')).group(1))
+  try:
+    series    = title(re.sub('<[^>]+>', '', re.search('<h3 class="panel-title">(.*)</h3>', html).group(1)).strip())
+    status    = re.search('<th.*?>Status:</th>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
+    author    = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<th.*?>\\s*Authors?\\s*:?\\s*</th>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1)))
+    tags      = re.findall(r'<span.*?>\s*<a.*?>\s*([A-Za-z]*?)\s*</a>\s*</span>', re.search(r'<th.*?>\s*Genres?\s*:?\s*</th>\s*<td>(.*?)</td>', html.replace('\n', '')).group(1))
+  except:
+    logger.exception('url: %s', url)
+    raise
   for j in range(len(tags)):
     for k in tag_dict:
       tags[j] = re.sub(k, tag_dict[k], tags[j])
 
   chapters  = []
 
-  for j in re.findall(r'<tr.*?>\s*(.*?/chapter/.*?)\s*</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
-    if 'title="{}"'.format(batoto_lang) in j:
-      match  = re.search(r'<a href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
-      m2     = re.search('[Cc]h(ap)?(ter)?\\.?\\s*([Ee]xtras?:?)?\\s*[\\.:-]?\\s*([\\d\\.,]+)?\\s*(-\\s*[\\d\\.]+)?', match.group(2))
-      name   = match.group(2).replace(m2.group(0), '')
+  for j in re.findall(r'<tr>\s*<td>\s*(<a\s+href=./chapter/.*?)\s*</time></td>\s*</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
+    if lang in j:
       try:
-        if m2.group(3):
+        match  = re.search(r'<a href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
+        m2     = re.search(r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)\s*[\.:-]?\s*([\d\.,]+)?\s*(-\s*[\d\.]+)?', match.group(2))
+        name   = match.group(2).replace(m2.group(0), '')
+        logger.debug('found chapter: %s', match.group(2))
+
+        if m2.group(4):
           num = 0
         else:
-          num = float(m2.group(4).replace(',', '.'))
+          num = float(m2.group(5).replace(',', '.'))
       except:
-        if args.debug:
-          print(j)
+        logger.debug(j)
         raise
 
       '''
@@ -732,10 +787,11 @@ def batoto(url, download_chapters):
         name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
 
       if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
-        if args.debug or args.verbose:
-          print('  Gathering info: \"{}\"'.format(name))
+        logger.info('  Gathering info: \"{}\"'.format(name))
         chap_html = get_html(link+'1')
         img_url   = re.sub('/1\\.([A-Za-z]{3})$', '/{}.\\1', re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1))
+        if 'http' not in img_url:
+          img_url += 'https://mangadex.com/'
         zero = False
         if '{}' not in img_url:
           img_url  = re.sub(r'/0\.([a-zA-Z]{3}))', '/{}.\\1', img_url)
@@ -751,7 +807,7 @@ def batoto(url, download_chapters):
         else:
           continue
         b_links = {float(i[1]):link+i[0] for i in re.findall(r'<option[^>]+value=[\"\'](.*?)[\'\"].*?>Page (\d+)</option>', chap_html)}
-        b_links = [b_links[i+1] for i in range(pages)]
+        b_links = ['https://mangadex.com/'+b_links[i+1] for i in range(pages)]
         if zero:
           links = [img_url.format(i) for i in range(pages)]
         else:
@@ -789,8 +845,7 @@ def mangapanda(url, download_chapters):
       name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
 
     if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
-      if args.debug or args.verbose:
-        print('  Gathering info: \"{}\"'.format(name))
+      logger.info('  Gathering info: \"{}\"'.format(name))
       chap_html = get_html(link)
       links     = ['http://www.mangareader.net' + i for i in re.findall('<option value=\"(.*?)\".*?>\\d+</option>', chap_html)]
       chapters.append({'name':name, 'links':links, 'backup_links':links, 'date':date, 'pages':len(links), 'num':num})
@@ -828,8 +883,7 @@ def goodmanga(url, download_chapters):
         name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
 
       if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
-        if args.debug or args.verbose:
-          print('  Gathering info: \"{}\"'.format(name))
+        logger.info('  Gathering info: \"{}\"'.format(name))
         chap_html  = get_html(link)
         img_url    = re.sub('1.([jpgnig]{3})', '{}.\\1', re.search('</div>\\s*<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', chap_html, re.DOTALL|re.MULTILINE).group(1))
         pages      = max([int(i) for i in re.findall('<option value=\".*?\".*?>\\s*(\\d+)\\s*</option>', chap_html)])
@@ -866,26 +920,29 @@ def main():
     download_chapters = sorted(list(set([float(j) for j in download_chapters])))
 
   if not args.url:
-    for item in tree.getroot().iterfind('entry'):
+    for entry in tree.getroot().iterfind('entry'):
       session = Session()
       session.headers.update({'User-agent': 'Mozilla/5.0'})
       try:
-        url       = entry.find('url').text.strip()
-        try:
-          last    = float(entry.find('last').text)
-        except:
-          entry.append(Element('last', text='-1'))
-          last    = -1
-        try:
-          dest    = entry.find('destination').text
-        except:
-          if not args.add_to_calibre:
-            dest  = './'
-          else:
-            dest  = ''
+        url = entry.find('url').text.strip()
       except:
+        logger.exception(ET.tostring(entry))
         sys.exit(-1)
-      print('URL - {}'.format(url))
+
+      try:
+        last   = float(entry.find('last').text.strip())
+      except:
+        entry.append(Element('last', text='-1'))
+        last   = -1
+
+      try:
+        dest   = entry.find('destination').text
+      except:
+        if not args.add_to_calibre:
+          dest = './'
+        else:
+          dest = ''
+      logger.info('URL - {}'.format(url))
 
       if 'mangadex.com' in url:
         mangadex(url, download_chapters)
