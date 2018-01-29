@@ -488,11 +488,7 @@ def function_name(chapters, series, tags, author, status):
       shutil.rmtree(chapdir)
     logger.debug('NOT deleting chapdir: \"%s\"', chapdir)
     if not args.url:
-      entries = tree.getroot().iterfind('entry')
-      elem = next(e in entries if url in e.find('.//url').text)
-
-      if url != elem.find('.//url').text:
-        elem.find('.//url').text = url
+      elem = tree.getroot().find(f'entry[url="{url}"]')
 
       elem.find('.//url').set('name', series)
 
@@ -515,11 +511,7 @@ def function_name(chapters, series, tags, author, status):
     if status != 'Completed':
       if l > last:
         last = l
-      entries = tree.getroot().iterfind('entry')
-      elem = next(e in entries if url in e.find('.//url').text)
-
-      if url != elem.find('.//url').text:
-        elem.find('.//url').text = url
+      elem = tree.getroot().find(f'entry[url="{url}"]')
 
       elem.find('.//url').set('name', series)
 
