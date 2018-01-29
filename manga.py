@@ -88,7 +88,7 @@ tag_dict = {
   'Slice of Life':  'Nichijou'
 }
 calibredb_executable = 'calibredb'
-lib_path='/home/az/Pictures/.manga/Manga_LN'
+lib_path='/mnt/5TB_share/Calibre/Manga/Manga_LN'
 lang = 'English'
 
 #My own version of title case
@@ -181,6 +181,11 @@ def check_pid(pid):
 def login_batoto(username=None, password=None):
   global session
   global tree
+
+  root   = tree.getroot()
+  config = root.find('batoto') if root else {}
+  if config is None:
+    config = {}
 
   if not username:
     username = args.username or (root.find('batot') or {}).get('username')
@@ -387,7 +392,7 @@ def save(links, dirName, img_type, image_links=False):
           data = r.content
           break
         except:
-          if k % 2 == 1 and 'bato.to' in img_url:
+          if k % 2 == 1:
             if img_url.endswith('png'):
               img_url = re.sub('png$', 'jpg', img_url)
               img_name = '{}{:03}.{}'.format(dirName, i+1, 'jpg')
@@ -402,11 +407,13 @@ def save(links, dirName, img_type, image_links=False):
           pass
         time.sleep(1.7)
       if not data:
+        logger.info('  Could not find image %d (%s)', i, img_url)
         dec += 1
         continue
       with open(img_name, 'wb') as f:
         f.write(data)
   print()
+  return len(links) - dec
 
 #I'm calling this function name because I can't think of a better name for it
 def function_name(chapters, series, tags, author, status):
@@ -422,6 +429,7 @@ def function_name(chapters, series, tags, author, status):
     'getting:\n  chapters: %s\n  series: %s\n  tags: %s\n  author: %s\n  status: %s',
     chapters, series, tags, author, status
   )
+  print('Series: {}'.format(series))
   tmpdir = tempfile.mkdtemp()+'/'
 
   for i in re.findall('(&#(\\d*?);)', str(series)):
@@ -431,7 +439,8 @@ def function_name(chapters, series, tags, author, status):
     for i in re.findall('(&#(\\d*?);)', str(chapter['name'])):
       chapter['name'] = chapter['name'].replace(i[0], chr(int(i[1])))
 
-    logger.info('  Downloading chapter - {}'.format(chapter['name']))
+    print('  Downloading chapter - {}'.format(chapter['name']))
+    logger.info('Downloading chapter - {}'.format(chapter['name']))
     f_name  = '{}{}.cbz'.format(tmpdir, re.sub('[$&\\*<>:;/]', '_', chapter['name']))
     chapdir = tempfile.mkdtemp(dir=tmpdir)+'/'
 
@@ -444,7 +453,7 @@ def function_name(chapters, series, tags, author, status):
       if 'mangareader.net' in url or 'mangapanda.com' in url:
         raise NameError('Not_Valid_Site_for_Quick_links')
 
-      save(chapter['links'], chapdir, chapter['links'][0].rpartition('.')[2][:3], True)
+      chapter['pages'] = save(chapter['links'], chapdir, chapter['links'][0].rpartition('.')[2][:3], True)
     except:
       try:
         print('\r  Slight problem - will use backup solution(may be a bit slower)')
@@ -479,16 +488,20 @@ def function_name(chapters, series, tags, author, status):
       shutil.rmtree(chapdir)
     logger.debug('NOT deleting chapdir: \"%s\"', chapdir)
     if not args.url:
-      for elem in tree.getroot().iterfind('entry'):
-        if url in elem.find('url').text: break
+      entries = tree.getroot().iterfind('entry')
+      elem = next(e in entries if url in e.find('.//url').text)
+
+      if url != elem.find('.//url').text:
+        elem.find('.//url').text = url
+
+      elem.find('.//url').set('name', series)
+
+      if elem.find('.//last'):
+        elem.find('.//last').text = str(l)
       else:
-        raise NameError('could not find entry')
-      if url != elem.find('url').text:
-        elem.find('url').text = url
-      if elem.find('last'):
-        elem.find('last').text = str(l)
-      else:
-        elem.append(Element('last', text=str(l)))
+        elem.find('.//url').tail = '\n    '
+        elem.append(Element('last', text=str(l), tail='\n  '))
+        tree.write(xml_list)
 
   if not args.debug:
     try:
@@ -502,14 +515,20 @@ def function_name(chapters, series, tags, author, status):
     if status != 'Completed':
       if l > last:
         last = l
-      for elem in tree.getroot().iterfind('entry'):
-        if url in elem.find('url').text: break
+      entries = tree.getroot().iterfind('entry')
+      elem = next(e in entries if url in e.find('.//url').text)
+
+      if url != elem.find('.//url').text:
+        elem.find('.//url').text = url
+
+      elem.find('.//url').set('name', series)
+
+      if elem.find('.//last'):
+        elem.find('.//last').text = str(l)
       else:
-        raise NameError('could not find entry')
-      if elem.find('last'):
-        elem.find('last').text = str(l)
-      else:
-        elem.append(Element('last', text=str(l)))
+        elem.find('.//url').tail = '\n    '
+        elem.append(Element('last', text=str(l), tail='\n  '))
+        tree.write(xml_list)
     else:
       tree.getroot().remove(elem)
 
@@ -517,7 +536,7 @@ def function_name(chapters, series, tags, author, status):
     tree.write(xml_list)
 
 def mangareader(url, download_chapters):
-  html  = get_html(url)
+  html = get_html(url)
   global last
 
   series    = title(re.search('<td.*?>\\s*Name:.*?<h2.*?>\\s*(.*?)\\s*</h2>\\s*</td>', html.replace('\n', '')).group(1))
