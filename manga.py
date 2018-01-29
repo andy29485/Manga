@@ -809,19 +809,23 @@ def mangadex(url, download_chapters):
       if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
         logger.info('  Gathering info: \"{}\"'.format(name))
         chap_html = get_html(link+'1')
-        img_url   = re.sub('/1\\.([A-Za-z]{3})$', '/{}.\\1', re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1))
+        img_url   = re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1)
+        logger.debug('original url: %s', img_url)
+        img_url = re.sub('(/?)0*[01]\\.([A-Za-z]{3})$', r'\1{}.\2', img_url)
         if 'http' not in img_url:
           img_url = 'https://mangadex.com/' + img_url
         zero = False
         if '{}' not in img_url:
-          img_url  = re.sub(r'/0\.([a-zA-Z]{3}))', '/{}.\\1', img_url)
+          img_url  = re.sub(r'(/?)0\.([a-zA-Z]{3})', r'\1{}.\2', img_url)
           zero = True
           if '{}' not in img_url:
-            img_url  = re.sub(r'/01\.([a-zA-Z]{3}))', '{:02}.\\1', img_url)
+            img_url  = re.sub(r'(/?)01\.([a-zA-Z]{3})', r'\1{:02}.\2', img_url)
             zero = False
             if '{:02}' not in img_url:
-              img_url  = re.sub('00\\.([A-Za-z]{3})', '{:02}.\\1', img_url)
+              img_url  = re.sub('0*[01]\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
               zero = True
+        logger.debug('general  url: %s', img_url)
+
         if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html):
           pages = max([int(i) for i in re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)])
         else:
