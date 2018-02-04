@@ -767,15 +767,15 @@ def mangadex(url, download_chapters):
 
   chapters  = []
 
-  for j in re.findall(r'<tr>\s*<td>\s*(<a\s+href=./chapter/.*?)\s*</time></td>\s*</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
+  for j in re.findall(r'<tr>\s*<td>\s*(<a[^>]+href=./chapter/.*?)\s*</time></td>\s*</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
     if lang in j:
       try:
-        match  = re.search(r'<a href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
+        match  = re.search(r'<a[^>]+href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
         m2     = re.search(r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)\s*[\.:-]?\s*([\d\.,]+)?\s*(-\s*[\d\.]+)?', match.group(2))
-        name   = match.group(2).replace(m2.group(0), '')
+        name   = match.group(2).replace(m2.group(0) if m2 else match.group(2), '')
         logger.debug('found chapter: %s', match.group(2))
 
-        if m2.group(4):
+        if not m2 or m2.group(4):
           num = 0
         else:
           num = float(m2.group(5).replace(',', '.'))
@@ -942,6 +942,7 @@ def main():
         for j in range(int(float(re.split('\\s*-\\s*', i, maxsplit=1)[0])*10), int(float(re.split('\\s*-\\s*', i, maxsplit=1)[1])*10)+1):
           download_chapters.append(j/10.0)
     download_chapters = sorted(list(set([float(j) for j in download_chapters])))
+    #logger.debug('chapters: %s', ','.join(str(x) for x in download_chapters))
 
   if not args.url:
     for entry in tree.getroot().iterfind('entry'):
