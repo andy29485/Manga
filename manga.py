@@ -492,7 +492,7 @@ def function_name(chapters, series, tags, author, status):
 
       elem.find('.//url').set('name', series)
 
-      if elem.find('.//last'):
+      if elem.find('.//last') is not None:
         elem.find('.//last').text = str(l)
       else:
         elem.find('.//url').tail = '\n    '
@@ -508,14 +508,14 @@ def function_name(chapters, series, tags, author, status):
   logger.debug('NOT deleting tmpdir: \"%s\"', chapdir)
 
   if not args.url:
+    elem = tree.getroot().find(f'entry[url="{url}"]')
     if status != 'Completed':
       if l > last:
         last = l
-      elem = tree.getroot().find(f'entry[url="{url}"]')
 
       elem.find('.//url').set('name', series)
 
-      if elem.find('.//last'):
+      if elem.find('.//last') is not None :
         elem.find('.//last').text = str(l)
       else:
         elem.find('.//url').tail = '\n    '
