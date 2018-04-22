@@ -755,7 +755,7 @@ def mangadex(url, download_chapters):
 
   try:
     series    = title(re.sub('<[^>]+>', '', re.search('<h3 class="panel-title">(.*)</h3>', html).group(1)).strip())
-    status    = re.search('<th.*?>Status:</th>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
+    status    = re.search('<th.*?>Pub. status:</th>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
     author    = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<th.*?>\\s*Authors?\\s*:?\\s*</th>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1)))
     tags      = re.findall(r'<span.*?>\s*<a.*?>\s*([A-Za-z]*?)\s*</a>\s*</span>', re.search(r'<th.*?>\s*Genres?\s*:?\s*</th>\s*<td>(.*?)</td>', html.replace('\n', '')).group(1))
   except:
@@ -767,7 +767,7 @@ def mangadex(url, download_chapters):
 
   chapters  = []
 
-  for j in re.findall(r'<tr>\s*<td>\s*(<a[^>]+href=./chapter/.*?)\s*</time></td>\s*</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
+  for j in re.findall(r'<td>\s*(<a[^>]+href=./chapter/.*?)</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
     if lang in j:
       try:
         match  = re.search(r'<a[^>]+href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
@@ -792,9 +792,10 @@ def mangadex(url, download_chapters):
           num = last + .4
       '''
       try:
-        vol  = re.search('[Vv]ol(ume)?\\.\\s*(\\d+)', match.group(2))
-        vol  = int(vol.group(2))
+        vol  = re.search(r'[Vv]ol(ume)?\.?\s*(\d+)', match.group(2))
         name = name.replace(vol.group(0), '').strip()
+        name = re.sub(r'^\s*-? ?(Read On[ -]?line)?\s*', '', name, re.I)
+        vol  = int(vol.group(2))
       except:
         vol  = 0
       link   = 'https://mangadex.com/{}/'.format(match.group(1))
