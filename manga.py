@@ -969,7 +969,7 @@ def main():
           dest = ''
       logger.info('URL - {}'.format(url))
 
-      if 'mangadex.com' in url:
+      if 'mangadex' in url:
         mangadex(url, download_chapters)
       elif 'mangareader.net' in url:
         mangareader(url, download_chapters)
@@ -994,7 +994,7 @@ def main():
     if not download_chapters:
       last = -1
 
-    if 'mangadex.com' in url:
+    if 'mangadex' in url:
       mangadex(url, download_chapters)
     elif 'mangareader.net' in url:
       mangareader(url, download_chapters)
