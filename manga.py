@@ -566,7 +566,7 @@ def mangahere(url, download_chapters):
   html  = get_html(url)
   global last
 
-  series    = title(re.search('<h1 class="title"><span class="title_icon"></span>(.*?)</h1>', html.replace('\n', '')).group(1))
+  series    = title(re.search('<(h1 class=")?title"?><span class="title_icon"></span>(.*?)</(h1|title)>', html.replace('\n', '')).group(1))
   status    = re.search('<li><label>Status:</label>(.*?)<', html.replace('\n', '')).group(1)
   author    = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<li><label>Author\\(?s?\\)?:</label>(.*?)</li>', html.replace('\n', '')).group(1)))
   tags      = re.search('<li><label>Genre\\(s\\):</label>(.*?)</li>', html).group(1).split(', ')
