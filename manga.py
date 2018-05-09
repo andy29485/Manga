@@ -11,6 +11,7 @@ import tempfile
 import logging
 import zipfile
 import shutil
+import html
 import time
 import sys
 import os
@@ -126,12 +127,12 @@ def request(url, set_head=False):
   return r
 
 def get_html(url, set_head=False):
-  html = request(url, set_head=set_head)
-  return html.text.replace(
-    '&amp;' , '&' ).replace(
-    '&quot;', '\"').replace(
-    '&lt;'  , '<' ).replace(
-    '&gt;'  , '>' ).replace(
+  h = request(url, set_head=set_head)
+  return html.unescape(h.text).replace(
+    # '&amp;' , '&' ).replace(
+    # '&quot;', '\"').replace(
+    # '&lt;'  , '<' ).replace(
+    # '&gt;'  , '>' ).replace(
     '\\n'   , '\n').replace(
     '\\t'   , '\t').replace(
     '\\r'   , ''  )
@@ -447,7 +448,7 @@ def function_name(chapters, series, tags, author, status):
     logger.info('  Chapdir - \"{}\"'.format(chapdir))
 
     try:
-      if len(list(set(chapter['links']))) <= 1:
+      if len(list(set(chapter['links']))) < chapter['pages']:
         raise NameError('All_Links_are_the_Same')
 
       if 'mangareader.net' in url or 'mangapanda.com' in url:
@@ -816,15 +817,18 @@ def mangadex(url, download_chapters):
         if 'http' not in img_url:
           img_url = 'https://mangadex.com/' + img_url
         zero = False
-        if '{}' not in img_url:
-          img_url  = re.sub(r'(/?)0\.([a-zA-Z]{3})', r'\1{}.\2', img_url)
+        if '{' not in img_url:
+          img_url = re.sub(r'(/?)0\.([a-zA-Z]{3})', r'\1{}.\2', img_url)
           zero = True
-          if '{}' not in img_url:
-            img_url  = re.sub(r'(/?)01\.([a-zA-Z]{3})', r'\1{:02}.\2', img_url)
-            zero = False
-            if '{:02}' not in img_url:
-              img_url  = re.sub('0*[01]\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
-              zero = True
+        if '{' not in img_url:
+          img_url = re.sub(r'(/?)01\.([a-zA-Z]{3})', r'\1{:02}.\2', img_url)
+          zero = False
+        if '{' not in img_url:
+          img_url = re.sub('0*1\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
+          zero = False
+        if '{' not in img_url:
+          img_url = re.sub('0*0\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
+          zero = True
         logger.debug('general  url: %s', img_url)
 
         if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html):
