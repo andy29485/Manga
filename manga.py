@@ -184,7 +184,7 @@ def login_batoto(username=None, password=None):
   global tree
 
   root   = tree.getroot()
-  config = root.find('batoto') if root else {}
+  config = root.find('batoto') if root is not None else {}
   if config is None:
     config = {}
 
@@ -225,7 +225,7 @@ def login_mangadex(username=None, password=None):
   global session
   global tree
   root   = tree.getroot()
-  config = root.find('mangadex') if root else {}
+  config = root.find('mangadex') if root is not None else {}
   if config is None:
     config = {}
 
@@ -385,7 +385,8 @@ def save(links, dirName, img_type, image_links=False):
 
       logger.debug('Downloading(%s) %s', 'T' if image_links else 'F', img_url)
 
-      for k in range(7):
+      trys = 8
+      for k in range(trys):
         try:
           r = request(img_url)
           if r.status_code != 200:
@@ -393,14 +394,10 @@ def save(links, dirName, img_type, image_links=False):
           data = r.content
           break
         except:
-          if k % 2 == 1:
-            if img_url.endswith('png'):
-              img_url = re.sub('png$', 'jpg', img_url)
-              img_name = '{}{:03}.{}'.format(dirName, i+1, 'jpg')
-            else:
-              img_url = re.sub('jpg$', 'png', img_url)
-              img_name = '{}{:03}.{}'.format(dirName, i+1, 'png')
-          if k == 6:
+          ext = '.' + ('png', 'jpg', 'jpeg', 'gif')[k%4]
+          img_url = img_url.rpartition('.')[0] + ext
+          img_name = '{}{:03}{}'.format(dirName, i+1, ext)
+          if k == trys-1:
             if 'mangadex' in img_url:
               data = None
               break
