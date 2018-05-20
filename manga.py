@@ -49,8 +49,9 @@ if os.path.exists(xml_list):
     tree = ET.parse(xml_list)
   except:
     with open(xml_list, 'r') as f: lines = f.readlines()
-    lines.insert(1, '<xml>')
-    lines.append('</xml>')
+    if '<xml>' not in lines:
+      lines.insert(1, '<xml>')
+      lines.append('</xml>')
     with open(xml_list, 'w') as f: f.write('\n'.join(lines))
     tree = ET.parse(xml_list)
 
