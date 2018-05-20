@@ -93,7 +93,7 @@ tag_dict = {
 cinfo = tree.find('./calibre')
 cinfo = cinfo if cinfo is not None else {}
 calibredb_executable = cinfo.get('exec', 'calibredb')
-lib_path             = cinfo.get('exec', 'calibredb')
+lib_path             = cinfo.get('exec', 'location')
 lang                 = tree.findtext('./lang', 'English')
 
 #My own version of title case
