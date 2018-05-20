@@ -88,9 +88,10 @@ if args.verbose:
 tag_dict = {
   'Slice of Life':  'Nichijou'
 }
-calibredb_executable = 'calibredb'
-lib_path='/mnt/5TB_share/Calibre/Manga/Manga_LN'
-lang = 'English'
+cinfo = tree.find('./calibre') or {}
+calibredb_executable = cinfo.get('exec', 'calibredb')
+lib_path             = cinfo.get('exec', 'calibredb')
+lang                 = tree.findtext('./lang', 'English')
 
 #My own version of title case
 #It's like regular title case but some

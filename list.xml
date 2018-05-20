@@ -1,4 +1,6 @@
 <xml>
+  <lang>English</lang>
+  <calibre location="/path/to/calibre/database/dir/" exec="calibredb"/>
   <mangadex username="Your Username" password="Your Password" />
   <batoto username="Your Username" password="Your Password" />
   <entry>
