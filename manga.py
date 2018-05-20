@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from os.path import expanduser
-import xml.etree.cElementTree as ET
+from lxml import etree
 from datetime import datetime
 from requests import Session
 import urllib.request
@@ -46,14 +46,15 @@ logger.addHandler(fh)
 if os.path.exists(xml_list):
   global tree
   try:
-    tree = ET.parse(xml_list)
+    parser = etree.XMLParser(recover=True, remove_blank_text=True)
+    tree = etree.parse(xml_list, parser=parser).getroot()
   except:
     with open(xml_list, 'r') as f: lines = f.readlines()
     if '<xml>' not in lines:
       lines.insert(1, '<xml>')
       lines.append('</xml>')
     with open(xml_list, 'w') as f: f.write('\n'.join(lines))
-    tree = ET.parse(xml_list)
+    tree = etree.parse(xml_list, parser=parser).getroot()
 
 parser = argparse.ArgumentParser()
 parser . add_argument('-x', '--list',           default = xml_list,     type=str, help='Path to xml list containing data - default list.xml in directory of this script')
@@ -89,7 +90,8 @@ if args.verbose:
 tag_dict = {
   'Slice of Life':  'Nichijou'
 }
-cinfo = tree.find('./calibre') or {}
+cinfo = tree.find('./calibre')
+cinfo = cinfo if cinfo is not None else {}
 calibredb_executable = cinfo.get('exec', 'calibredb')
 lib_path             = cinfo.get('exec', 'calibredb')
 lang                 = tree.findtext('./lang', 'English')
@@ -139,13 +141,12 @@ def get_html(url, set_head=False):
     '\\t'   , '\t').replace(
     '\\r'   , ''  )
 
-class Element(ET.Element):
-  def __init__(self, tag, text=None, tail=None, attrib={}, **extra):
-    super().__init__(tag, attrib, **extra)
-    if text:
-      self.text = text
-    if tail:
-      self.tail = tail
+def savexml(tree, filename=xml_list):
+  with open(filename, 'w') as f:
+    tree_str = etree.tostring(tree, xml_declaration=True,
+                              pretty_print=True, encoding='UTF-8'
+    )
+    f.write(tree_str.decode())
 
 #Zips directory int a file called zip_file
 def zipper(dirName, zip_file):
@@ -185,15 +186,15 @@ def login_batoto(username=None, password=None):
   global session
   global tree
 
-  root   = tree.getroot()
-  config = root.find('batoto') if root is not None else {}
+  root   = tree
+  config = root.find('.//batoto') if root is not None else {}
   if config is None:
     config = {}
 
   if not username:
-    username = args.username or (root.find('batot') or {}).get('username')
+    username = args.username or config.get('username')
   if not password:
-    password = args.password or (root.find('batot') or {}).get('password')
+    password = args.password or config.get('password')
 
   if not username:
     print('It seems like you want to use bato.to, but did not provide a' + \
@@ -226,8 +227,8 @@ def login_batoto(username=None, password=None):
 def login_mangadex(username=None, password=None):
   global session
   global tree
-  root   = tree.getroot()
-  config = root.find('mangadex') if root is not None else {}
+  root   = tree
+  config = root.find('.//mangadex') if root is not None else {}
   if config is None:
     config = {}
 
@@ -242,7 +243,7 @@ def login_mangadex(username=None, password=None):
     username = input('please enter your mangadex username: ')
     password = input('please enter your mangadex password: ')
     if root and not config:
-      root.append(Element('mangadex', username=username, password=password))
+      etree.SubElement(root, 'mangadex', username=username, password=password)
     elif config:
       config.set('username', username)
       config.set('password', password)
@@ -480,6 +481,10 @@ def function_name(chapters, series, tags, author, status):
       dirName = '{}/{}/'.format(dest, re.sub('[$&\\*<>:;/]', '_', series))
       if not os.path.isdir(dirName):
         os.makedirs(dirName)
+
+      dest_name = os.path.join(dirName, os.path.basename(f_name))
+      if os.path.exists(dest_name):
+        os.remove(dest_name)
       shutil.move(f_name, dirName)
 
     l=chapter['num']
@@ -488,16 +493,16 @@ def function_name(chapters, series, tags, author, status):
       shutil.rmtree(chapdir)
     logger.debug('NOT deleting chapdir: \"%s\"', chapdir)
     if not args.url:
-      elem = tree.getroot().find(f'entry[url="{url}"]')
+      elem = tree.find(f'entry[url="{url}"]')
 
       elem.find('.//url').set('name', series)
 
       if elem.find('.//last') is not None:
         elem.find('.//last').text = str(l)
       else:
-        elem.find('.//url').tail = '\n    '
-        elem.append(Element('last', text=str(l), tail='\n  '))
-        tree.write(xml_list)
+        lst = etree.SubElement(elem, 'last')
+        lst.text = str(l)
+        savexml(tree, xml_list)
 
   if not args.debug:
     try:
@@ -508,7 +513,7 @@ def function_name(chapters, series, tags, author, status):
   logger.debug('NOT deleting tmpdir: \"%s\"', chapdir)
 
   if not args.url:
-    elem = tree.getroot().find(f'entry[url="{url}"]')
+    elem = tree.find(f'entry[url="{url}"]')
     if status != 'Completed':
       if l > last:
         last = l
@@ -518,14 +523,14 @@ def function_name(chapters, series, tags, author, status):
       if elem.find('.//last') is not None :
         elem.find('.//last').text = str(l)
       else:
-        elem.find('.//url').tail = '\n    '
-        elem.append(Element('last', text=str(l), tail='\n  '))
-        tree.write(xml_list)
+        lst = etree.SubElement(elem, 'last')
+        lst.text = str(l)
+        savexml(tree, xml_list)
     else:
-      tree.getroot().remove(elem)
+      elem.getparent().remove(elem)
 
   if not args.url:
-    tree.write(xml_list)
+    savexml(tree, xml_list)
 
 def mangareader(url, download_chapters):
   html = get_html(url)
@@ -949,7 +954,7 @@ def main():
     #logger.debug('chapters: %s', ','.join(str(x) for x in download_chapters))
 
   if not args.url:
-    for entry in tree.getroot().iterfind('entry'):
+    for entry in tree.iterfind('entry'):
       session = Session()
       session.headers.update({'User-agent': 'Mozilla/5.0'})
       try:
@@ -985,7 +990,7 @@ def main():
       elif 'goodmanga.net' in url:
         goodmanga(url, download_chapters)
 
-      tree.write(xml_list)
+      savexml(tree, xml_list)
   else:
     if args.dest:
       dest = args.dest
