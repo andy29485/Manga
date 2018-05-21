@@ -4,7 +4,7 @@ import os, re, sys
 from colorama import Fore
 from lxml import etree
 
-current_dir = os.path.realpath(os.path.dirname(os.path.realpath(sys.argv[0])))
+current_dir = os.path.realpath(os.path.dirname(os.path.abspath(sys.argv[0])))
 xml_list    = os.path.join(current_dir, 'list.xml')
 
 if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):

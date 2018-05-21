@@ -17,7 +17,7 @@ import sys
 import os
 import re
 
-current_dir = os.path.realpath(os.path.dirname(os.path.realpath(sys.argv[0])))
+current_dir = os.path.realpath(os.path.dirname(os.path.abspath(sys.argv[0])))
 
 xml_list = os.path.join(current_dir, 'list.xml')
 session  = Session()
