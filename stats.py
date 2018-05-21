@@ -53,11 +53,11 @@ for ser,read,total in books_read:
 
 
 print('{}READING:'.format(Fore.YELLOW))
-for ser in books_reading:
+for ser,read,total in books_reading:
   print('  {} ({}/{})'.format(ser, read, total))
 
 print('{}UNREAD:'.format(Fore.RED))
-for ser in books_unread:
+for ser,read,total in books_unread:
   print('  {} ({}/{})'.format(ser, read, total))
 
 print(Fore.RESET)
