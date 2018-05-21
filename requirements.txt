@@ -1,0 +1,5 @@
+colorama
+lxml
+requests
+argparse
+zipfile
