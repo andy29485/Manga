@@ -13,6 +13,8 @@ if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
 parser = etree.XMLParser(recover=True, remove_blank_text=True)
 tree = etree.parse(xml_list, parser=parser).getroot()
 
+cinfo = tree.find('./calibre')
+cinfo = cinfo if cinfo is not None else {}
 calibredb = cinfo.get('exec', 'calibredb')
 lib_path  = cinfo.get('location', 'Calibre')
 
