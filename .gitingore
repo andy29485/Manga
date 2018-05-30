@@ -2,6 +2,7 @@ GitPortable/
 *.txt
 *.bat
 *.bat
+__pycache__/
 [A-Za-z0-9]*/
 logs/
 git.sh
