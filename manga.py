@@ -777,7 +777,7 @@ def mangadex(url, download_chapters, page=None):
   chapters = []
 
   max_page = re.search(
-    'href=["\'][^"\']+?\\D(\\d+)/?[\'"][^<>]*?>\\s*<[^<>]*?Jump to last page'
+    'href=["\'][^"\']+?\\D(\\d+)/?[\'"][^<>]*?>\\s*<[^<>]*?Jump to last page',
     html
   )
   if page == None and max_page:
