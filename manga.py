@@ -743,12 +743,12 @@ def batoto(url, download_chapters):
     function_name(chapters, series, tags, author, status)
 
 
-def mangadex(url, download_chapters, page=None):
+def mangadex(url, download_chapters, pageNum=None):
   login_mangadex()
   if url.endswith('/'):
     url = re.sub('/+$', '', url)
-  if page is not None:
-    url += '/chapters/{page}/'.format(page=page)
+  if pageNum is not None:
+    url += '/chapters/{page}/'.format(page=pageNum)
   for i in range(3):
     try:
       html  = get_html(url)
@@ -780,7 +780,7 @@ def mangadex(url, download_chapters, page=None):
     'href=["\'][^"\']+?\\D(\\d+)/?[\'"][^<>]*?>\\s*<[^<>]*?Jump to last page',
     html
   )
-  if page == None and max_page:
+  if pageNum == None and max_page:
     max_page = int(max_page.group(1))
     for page in range(max_page, 0, -1):
       chapters.extend(mangadex(url, download_chapters, page))
@@ -899,7 +899,7 @@ def mangadex(url, download_chapters, page=None):
               'pages':pages, 'num':num,
           })
 
-  if page is not None:
+  if pageNum is not None:
     return chapters
   elif chapters:
     function_name(chapters, series, tags, author, status)
