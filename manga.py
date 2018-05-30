@@ -837,7 +837,7 @@ def mangadex(url, download_chapters, page=None):
            'datetime=\"(.*?)( [A-Z]{3})?\"', j
         ).group(1).replace(' ', 'T')
 
-         = '{:3.2f}'.format(num).zfill(5)
+        strNum = '{:3.2f}'.format(num).zfill(5)
         if name:
           name = '{} - {} : {}'.format(series, strNum, name)
         else:
