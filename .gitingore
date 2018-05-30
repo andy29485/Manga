@@ -2,5 +2,6 @@ GitPortable/
 *.txt
 *.bat
 *.bat
-*/
+[A-Za-z0-9]*/
+logs/
 git.sh

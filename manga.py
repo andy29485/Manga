@@ -547,7 +547,7 @@ def mangareader(url, download_chapters):
 
   for j in re.findall('<tr>\\s*<td>\\s*<div.*?</div>(.*?)</tr>', html, re.DOTALL|re.MULTILINE):
     match = re.search('<a.*?([\\d.,-]+)</a>(\\s*:\\s*)(.*?)\\s*</td>', j)
-    num   = float(match.group(1))
+    num   = float(''.join(match.group(1).rsplit('.', match.group(1).count('.')-1)))
     name  = match.group(3)
     link  = 'http://www.mangareader.net' + re.search('<a\\s*href=\"(/.*?)\">', j).group(1)
     date  = re.search('<td>(\\d{2})/(\\d{2})/(\\d{4})</td>', j)
@@ -583,7 +583,7 @@ def mangahere(url, download_chapters):
   for j in re.findall('<li>\\s*<span class=\"left\">\\s*(.*?\\d{4}</span>)\\s*</li>', html, re.DOTALL|re.MULTILINE)[::-1]:
     match = re.search('<a.*?>.*?([\\d,.]+)\\s*</a>\\s*<span.*?>\\s*(.*?)\\s*</span>', j, re.DOTALL|re.MULTILINE)
     name  = match.group(2)
-    num   = float(match.group(1))
+    num   = float(''.join(match.group(1).rsplit('.', match.group(1).count('.')-1)))
     link  = re.search('href=\"(.*?)\"', j).group(1)
     try:
       date  = datetime.strptime(re.search('([A-Za-z]*? \\d{1,2}, \\d{4})</span>', j).group(1), '%b %d, %Y').strftime('%Y-%m-%d')
@@ -646,7 +646,8 @@ def batoto(url, download_chapters):
         if m2.group(3):
           num = 0
         else:
-          num = float(m2.group(4).replace(',', '.'))
+          num = m2.group(4).replace(',', '.')
+          num = float(''.join(num.rsplit('.', num.count('.')-1)))
       except:
         logger.debug(j[1])
         raise
@@ -741,10 +742,12 @@ def batoto(url, download_chapters):
     function_name(chapters, series, tags, author, status)
 
 
-def mangadex(url, download_chapters):
+def mangadex(url, download_chapters, page=None):
   login_mangadex()
   if url.endswith('/'):
     url = re.sub('/+$', '', url)
+  if page is not None:
+    url += '/chapters/{page}/'.format(page=page)
   for i in range(3):
     try:
       html  = get_html(url)
@@ -759,10 +762,10 @@ def mangadex(url, download_chapters):
   global session
 
   try:
-    series    = title(re.sub('<[^>]+>', '', re.search('<h3 class="panel-title">(.*)</h3>', html).group(1)).strip())
-    status    = re.search('<th.*?>Pub. status:</th>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
-    author    = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<th.*?>\\s*Authors?\\s*:?\\s*</th>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1)))
-    tags      = re.findall(r'<span.*?>\s*<a.*?>\s*([A-Za-z]*?)\s*</a>\s*</span>', re.search(r'<th.*?>\s*Genres?\s*:?\s*</th>\s*<td>(.*?)</td>', html.replace('\n', '')).group(1))
+    series = title(re.sub('<[^>]+>', '', re.search('<h3 class="panel-title">(.*)</h3>', html).group(1)).strip())
+    status = re.search('<th.*?>Pub. status:</th>\\s*<td>\\s*(.*?)\\s*</td>', html.replace('\n', '')).group(1)
+    author = ', '.join(re.findall('<a.*?>(.*?)</a>', re.search('<th.*?>\\s*Authors?\\s*:?\\s*</th>\\s*<td>(.*?)</td>', html.replace('\n', '')).group(1)))
+    tags   = re.findall(r'<span.*?>\s*<a.*?>\s*([A-Za-z]*?)\s*</a>\s*</span>', re.search(r'<th.*?>\s*Genres?\s*:?\s*</th>\s*<td>(.*?)</td>', html.replace('\n', '')).group(1))
   except:
     logger.exception('url: %s', url)
     raise
@@ -770,85 +773,94 @@ def mangadex(url, download_chapters):
     for k in tag_dict:
       tags[j] = re.sub(k, tag_dict[k], tags[j])
 
-  chapters  = []
+  chapters = []
 
-  for j in re.findall(r'<td>\s*(<a[^>]+href=./chapter/.*?)</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
-    if lang in j:
-      try:
-        match  = re.search(r'<a[^>]+href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
-        m2     = re.search(r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)\s*[\.:-]?\s*([\d\.,]+)?\s*(-\s*[\d\.]+)?', match.group(2))
-        name   = match.group(2).replace(m2.group(0) if m2 else match.group(2), '')
-        logger.debug('found chapter: %s', match.group(2))
+  max_page = re.search('href=["\'][^"\']+?\\D(\\d+)/?[\'"][^<>]*?>\\s*<[^<>]*?Jump to last page', html)
+  if page == None and max_page:
+    max_page = int(max_page.group(1))
+    for page in range(max_page, 0, -1):
+      chapters.extend(mangadex(url, download_chapters, page))
+  else:
+    for j in re.findall(r'<td>\s*(<a[^>]+href=./chapter/.*?)</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
+      if lang in j:
+        try:
+          match  = re.search(r'<a[^>]+href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
+          m2     = re.search(r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)\s*[\.:-]?\s*([\d\.,]+)?\s*(-\s*[\d\.]+)?', match.group(2))
+          name   = match.group(2).replace(m2.group(0) if m2 else match.group(2), '')
+          logger.debug('found chapter: %s', match.group(2))
 
-        if not m2 or m2.group(4):
-          num = 0
+          if not m2 or m2.group(4):
+            num = 0
+          else:
+            num = m2.group(5).replace(',', '.')
+            num = float(''.join(num.rsplit('.', num.count('.')-1)))
+        except:
+          logger.debug(j)
+          raise
+
+        '''
+        #TODO
+        if m2.group(3):
+          if chapters:
+            num = chapters[-1]['num'] + .4
+          else:
+            num = last + .4
+        '''
+        try:
+          vol  = re.search(r'[Vv]ol(ume)?\.?\s*(\d+)', match.group(2))
+          name = name.replace(vol.group(0), '').strip()
+          name = re.sub(r'^\s*-? ?(Read On[ -]?line)?\s*', '', name, re.I)
+          vol  = int(vol.group(2))
+        except:
+          vol  = 0
+        link   = 'https://mangadex.com/{}/'.format(match.group(1))
+
+        date = re.search('datetime=\"(.*?)( [A-Z]{3})?\"', j).group(1).replace(' ', 'T')
+
+        if name:
+          name = '{} - {} : {}'.format(series, '{:3.2f}'.format(num).zfill(5), name)
         else:
-          num = float(m2.group(5).replace(',', '.'))
-      except:
-        logger.debug(j)
-        raise
+          name = '{} - {}'.format(series, '{:3.2f}'.format(num).zfill(5))
 
-      '''
-      #TODO
-      if m2.group(3):
-        if chapters:
-          num = chapters[-1]['num'] + .4
-        else:
-          num = last + .4
-      '''
-      try:
-        vol  = re.search(r'[Vv]ol(ume)?\.?\s*(\d+)', match.group(2))
-        name = name.replace(vol.group(0), '').strip()
-        name = re.sub(r'^\s*-? ?(Read On[ -]?line)?\s*', '', name, re.I)
-        vol  = int(vol.group(2))
-      except:
-        vol  = 0
-      link   = 'https://mangadex.com/{}/'.format(match.group(1))
-
-      date = re.search('datetime=\"(.*?)( [A-Z]{3})?\"', j).group(1).replace(' ', 'T')
-
-      if name:
-        name = '{} - {} : {}'.format(series, '{:3.1f}'.format(num).zfill(5), name)
-      else:
-        name = '{} - {}'.format(series, '{:3.1f}'.format(num).zfill(5))
-
-      if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
-        logger.info('  Gathering info: \"{}\"'.format(name))
-        chap_html = get_html(link+'1')
-        img_url   = re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1)
-        logger.debug('original url: %s', img_url)
-        img_url = re.sub('(/?)0*[01]\\.([A-Za-z]{3})$', r'\1{}.\2', img_url)
-        if 'http' not in img_url:
-          img_url = 'https://mangadex.com/' + img_url
-        zero = False
-        if '{' not in img_url:
-          img_url = re.sub(r'(/?)0\.([a-zA-Z]{3})', r'\1{}.\2', img_url)
-          zero = True
-        if '{' not in img_url:
-          img_url = re.sub(r'(/?)01\.([a-zA-Z]{3})', r'\1{:02}.\2', img_url)
+        if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
+          logger.info('  Gathering info: \"{}\"'.format(name))
+          chap_html = get_html(link+'1')
+          img_url   = re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1)
+          logger.debug('original url: %s', img_url)
+          img_url = re.sub('(/?)0*[01]\\.([A-Za-z]{3})$', r'\1{}.\2', img_url)
+          if 'http' not in img_url:
+            img_url = 'https://mangadex.com/' + img_url
           zero = False
-        if '{' not in img_url:
-          img_url = re.sub('0*1\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
-          zero = False
-        if '{' not in img_url:
-          img_url = re.sub('0*0\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
-          zero = True
-        logger.debug('general  url: %s', img_url)
+          if '{' not in img_url:
+            img_url = re.sub(r'(/?)0\.([a-zA-Z]{3})', r'\1{}.\2', img_url)
+            zero = True
+          if '{' not in img_url:
+            img_url = re.sub(r'(/?)01\.([a-zA-Z]{3})', r'\1{:02}.\2', img_url)
+            zero = False
+          if '{' not in img_url:
+            img_url = re.sub('0*1\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
+            zero = False
+          if '{' not in img_url:
+            img_url = re.sub('0*0\\.([A-Za-z]{3})', r'{:02}.\1', img_url)
+            zero = True
+          logger.debug('general  url: %s', img_url)
 
-        if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html):
-          pages = max([int(i) for i in re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)])
-        else:
-          continue
-        b_links = {float(i[1]):link+i[0] for i in re.findall(r'<option[^>]+value=[\"\'](.*?)[\'\"].*?>Page (\d+)</option>', chap_html)}
-        b_links = ['https://mangadex.com/'+b_links[i+1] for i in range(pages)]
-        if zero:
-          links = [img_url.format(i) for i in range(pages)]
-        else:
-          links = [img_url.format(i+1) for i in range(pages)]
+          if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html):
+            pages = max([int(i) for i in re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)])
+          else:
+            continue
+          b_links = {float(i[1]):link+i[0] for i in re.findall(r'<option[^>]+value=[\"\'](.*?)[\'\"].*?>Page (\d+)</option>', chap_html)}
+          b_links = ['https://mangadex.com/'+b_links[i+1] for i in range(pages)]
+          if zero:
+            links = [img_url.format(i) for i in range(pages)]
+          else:
+            links = [img_url.format(i+1) for i in range(pages)]
 
-        chapters.append({'name':name, 'links':links, 'backup_links':b_links, 'date':date, 'pages':pages, 'num':num})
+          chapters.append({'name':name, 'links':links, 'backup_links':b_links, 'date':date, 'pages':pages, 'num':num})
 
-  if chapters:
+  if page is not None:
+    return chapters
+  elif chapters:
     function_name(chapters, series, tags, author, status)
 
 def mangapanda(url, download_chapters):
@@ -866,7 +878,7 @@ def mangapanda(url, download_chapters):
 
   for j in re.findall('<tr>\\s*<td>\\s*<div.*?</div>(.*?)</tr>', html, re.DOTALL|re.MULTILINE):
     match = re.search('<a.*?([\\d.,-]+)</a>(\\s*:\\s*)(.*?)\\s*</td>', j)
-    num   = float(match.group(1))
+    num   = float(''.join(match.group(1).rsplit('.', match.group(1).count('.')-1)))
     name  = match.group(3)
     link  = 'http://www.mangapanda.com' + re.search('<a\\s*href=\"(/.*?)\">', j).group(1)
     date  = re.search('<td>(\\d{2})/(\\d{2})/(\\d{4})</td>', j)
@@ -903,7 +915,7 @@ def goodmanga(url, download_chapters):
     for j in re.findall('<li>\\s*(.{1,300}?\\d{4}</span>)\\s*</li>', html, re.DOTALL|re.MULTILINE):
       match = re.search('<a.*?>.*?([\\d,.]+)\\s*</a>\\s*<span.*?>\\s*(.*?)\\s*</span>', j, re.DOTALL|re.MULTILINE)
       name  = match.group(2)
-      num   = float(match.group(1))
+      num   = float(''.join(match.group(1).rsplit('.', match.group(1).count('.')-1)))
       link  = re.search('href=\"(.*?)\"', j).group(1)
       try:
         date  = datetime.strptime(re.search('([A-Za-z]*? \\d{1,2}, \\d{4})</span>', j).group(1), '%b %d, %Y').strftime('%Y-%m-%d')
