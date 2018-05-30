@@ -207,7 +207,8 @@ def login_batoto(username=None, password=None):
   html = get_html(url, set_head=True)
   auth_key = re.search('auth_key.*?value=[\'"]([^\'"]+)', html).group(1)
   referer = re.search('referer.*?value=[\'"]([^\'"]+)', html).group(1)
-  url = 'https://bato.to/forums/index.php?app=core&module=global&section=login&do=process'
+  url = 'https://bato.to/forums/index.php?' +
+        'app=core&module=global&section=login&do=process'
   fields = {
     'anonymous'    : 1,
     'rememberMe'   : 1,
@@ -775,18 +776,35 @@ def mangadex(url, download_chapters, page=None):
 
   chapters = []
 
-  max_page = re.search('href=["\'][^"\']+?\\D(\\d+)/?[\'"][^<>]*?>\\s*<[^<>]*?Jump to last page', html)
+  max_page = re.search(
+    'href=["\'][^"\']+?\\D(\\d+)/?[\'"][^<>]*?>\\s*<[^<>]*?Jump to last page'
+    html
+  )
   if page == None and max_page:
     max_page = int(max_page.group(1))
     for page in range(max_page, 0, -1):
       chapters.extend(mangadex(url, download_chapters, page))
   else:
-    for j in re.findall(r'<td>\s*(<a[^>]+href=./chapter/.*?)</tr>', html, re.DOTALL|re.MULTILINE)[::-1]:
+    found_chaps = re.findall(
+                  r'<td>\s*(<a[^>]+href=./chapter/.*?)</tr>',
+                  html, re.DOTALL|re.MULTILINE
+    )
+    for j in found_chaps[::-1]:
       if lang in j:
         try:
-          match  = re.search(r'<a[^>]+href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>', j, re.DOTALL|re.MULTILINE)
-          m2     = re.search(r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)\s*[\.:-]?\s*([\d\.,]+)?\s*(-\s*[\d\.]+)?', match.group(2))
-          name   = match.group(2).replace(m2.group(0) if m2 else match.group(2), '')
+          match  = re.search(
+                      r'<a[^>]+href=\"([^\"]*?)\".*?>\s*(.*?)\s*</a>',
+                      j, re.DOTALL|re.MULTILINE
+          )
+          m2     = re.search(
+                      r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)' +
+                      r'\s*[\.:-]?\s*([\d\.,]+)?\s*(-\s*[\d\.]+)?',
+                     match.group(2)
+          )
+          name   = match.group(2).replace(
+                      m2.group(0) if m2 else match.group(2),
+                      ''
+          )
           logger.debug('found chapter: %s', match.group(2))
 
           if not m2 or m2.group(4):
@@ -815,17 +833,29 @@ def mangadex(url, download_chapters, page=None):
           vol  = 0
         link   = 'https://mangadex.com/{}/'.format(match.group(1))
 
-        date = re.search('datetime=\"(.*?)( [A-Z]{3})?\"', j).group(1).replace(' ', 'T')
+        date = re.search(
+           'datetime=\"(.*?)( [A-Z]{3})?\"', j
+        ).group(1).replace(' ', 'T')
 
+         = '{:3.2f}'.format(num).zfill(5)
         if name:
-          name = '{} - {} : {}'.format(series, '{:3.2f}'.format(num).zfill(5), name)
+          name = '{} - {} : {}'.format(series, strNum, name)
         else:
-          name = '{} - {}'.format(series, '{:3.2f}'.format(num).zfill(5))
+          name = '{} - {}'.format(series, strNum)
 
-        if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
+        if (download_chapters and num in download_chapters) \
+            or (not download_chapters and num > last):
           logger.info('  Gathering info: \"{}\"'.format(name))
-          chap_html = get_html(link+'1')
-          img_url   = re.search('<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"', chap_html, re.DOTALL|re.MULTILINE).group(1)
+          for ntry in range(3):
+            try:
+              chap_html = get_html(link+'1')
+              img_url = re.search(
+                          '<img[^<]*?id=\"current_page\".*?src=\"([^\"]*?)\"',
+                          chap_html, re.DOTALL|re.MULTILINE
+              ).group(1)
+              break
+            except:
+              pass
           logger.debug('original url: %s', img_url)
           img_url = re.sub('(/?)0*[01]\\.([A-Za-z]{3})$', r'\1{}.\2', img_url)
           if 'http' not in img_url:
@@ -845,18 +875,27 @@ def mangadex(url, download_chapters, page=None):
             zero = True
           logger.debug('general  url: %s', img_url)
 
-          if re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html):
-            pages = max([int(i) for i in re.findall(r'<option[^>]+value=[\"\'].*?[\'\"].*?>Page (\d+)</option>', chap_html)])
+          found_pages = re.findall(
+            r'<option[^>]+value=[\"\'](.*?)[\'\"].*?>Page (\d+)</option>',
+            chap_html
+          )
+          if found_pages:
+            pages = max([int(i) for _,i in found_pages])
           else:
             continue
-          b_links = {float(i[1]):link+i[0] for i in re.findall(r'<option[^>]+value=[\"\'](.*?)[\'\"].*?>Page (\d+)</option>', chap_html)}
-          b_links = ['https://mangadex.com/'+b_links[i+1] for i in range(pages)]
+          b_links = {int(i[1]):link+i[0] for i in found_pages}
+          b_links = sorted(b_links.items(), key=lambda t: t[0])
+          b_links = ['https://mangadex.com/'+i for _,i in b_links]
           if zero:
             links = [img_url.format(i) for i in range(pages)]
           else:
             links = [img_url.format(i+1) for i in range(pages)]
 
-          chapters.append({'name':name, 'links':links, 'backup_links':b_links, 'date':date, 'pages':pages, 'num':num})
+          chapters.append({
+              'name':name, 'links':links,
+              'backup_links':b_links, 'date':date,
+              'pages':pages, 'num':num,
+          })
 
   if page is not None:
     return chapters
@@ -929,14 +968,32 @@ def goodmanga(url, download_chapters):
 
       if (download_chapters and num in download_chapters) or (not download_chapters and num > last):
         logger.info('  Gathering info: \"{}\"'.format(name))
-        chap_html  = get_html(link)
-        img_url    = re.sub('1.([jpgnig]{3})', '{}.\\1', re.search('</div>\\s*<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>', chap_html, re.DOTALL|re.MULTILINE).group(1))
-        pages      = max([int(i) for i in re.findall('<option value=\".*?\".*?>\\s*(\\d+)\\s*</option>', chap_html)])
-        b_links    = {float(i[1]):i[0] for i in re.findall('<option value=\"(.*?)\".*?>\\s*(\\d+)\\s*</option>', chap_html)}
-        b_links    = [b_links[i+1] for i in range(pages)]
-        links      = [img_url.format(i+1) for i in range(pages)]
+        chap_html = get_html(link)
+        img_url = re.sub(
+                  '1.([jpgnig]{3})',
+                  '{}.\\1',
+                  re.search(
+                    '</div>\\s*<a.*?>\\s*<img[^<]*?src=\"(.*?)\".*?>\\s*</a>',
+                    chap_html, re.DOTALL|re.MULTILINE
+                  ).group(1)
+        )
+        found_pages = re.findall(
+                          '<option value=\"(.*?)\".*?>\\s*(\\d+)\\s*</option>',
+                          chap_html
+        )
+        pages   = max([int(i) for _,i in found_pages])
+        b_links = {float(i[1]):i[0] for i in found_pages}
+        b_links = [b_links[i+1] for i in range(pages)]
+        links   = [img_url.format(i+1) for i in range(pages)]
 
-        chapters.insert(0, {'name':name, 'links':links, 'backup_links':b_links, 'date':date, 'pages':pages, 'num':num})
+        chapters.insert(0,
+          {
+            'name':name, 'links':links,
+            'backup_links':b_links,
+            'date':date, 'pages':pages,
+            'num':num
+          }
+        )
     match   = re.search('<a href=\"(.*?)\">Next</a>', html)
     if match:
       html  = get_html(match.group(1))
@@ -960,9 +1017,11 @@ def main():
     for i in download_chapters:
       if type(i) == str and '-' in i:
         download_chapters.remove(i)
-        for j in range(int(float(re.split('\\s*-\\s*', i, maxsplit=1)[0])*10), int(float(re.split('\\s*-\\s*', i, maxsplit=1)[1])*10)+1):
+        start = int(float(re.split('\\s*-\\s*', i, maxsplit=1)[0])*10)
+        end   = int(float(re.split('\\s*-\\s*', i, maxsplit=1)[1])*10)
+        for j in range(start, end+1):
           download_chapters.append(j/10.0)
-    download_chapters = sorted(list(set([float(j) for j in download_chapters])))
+    download_chapters = sorted(set([float(j)for j in download_chapters]))
     #logger.debug('chapters: %s', ','.join(str(x) for x in download_chapters))
 
   if not args.url:
