@@ -846,6 +846,7 @@ def mangadex(url, download_chapters, page=None):
         if (download_chapters and num in download_chapters) \
             or (not download_chapters and num > last):
           logger.info('  Gathering info: \"{}\"'.format(name))
+          img_url = ''
           for ntry in range(3):
             try:
               chap_html = get_html(link+'1')
@@ -855,7 +856,8 @@ def mangadex(url, download_chapters, page=None):
               ).group(1)
               break
             except:
-              pass
+              if ntry == 2:
+                raise
           logger.debug('original url: %s', img_url)
           img_url = re.sub('(/?)0*[01]\\.([A-Za-z]{3})$', r'\1{}.\2', img_url)
           if 'http' not in img_url:
