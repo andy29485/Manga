@@ -207,7 +207,7 @@ def login_batoto(username=None, password=None):
   html = get_html(url, set_head=True)
   auth_key = re.search('auth_key.*?value=[\'"]([^\'"]+)', html).group(1)
   referer = re.search('referer.*?value=[\'"]([^\'"]+)', html).group(1)
-  url = 'https://bato.to/forums/index.php?' +
+  url = 'https://bato.to/forums/index.php?' + \
         'app=core&module=global&section=login&do=process'
   fields = {
     'anonymous'    : 1,
@@ -797,7 +797,7 @@ def mangadex(url, download_chapters, page=None):
                       j, re.DOTALL|re.MULTILINE
           )
           m2     = re.search(
-                      r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)' +
+                      r'([Cc]h(ap)?(ter)?\.?|([Ee]xtra|[Ss]pecial)s?:?)' + \
                       r'\s*[\.:-]?\s*([\d\.,]+)?\s*(-\s*[\d\.]+)?',
                      match.group(2)
           )
