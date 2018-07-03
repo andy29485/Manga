@@ -62,6 +62,7 @@ parser . add_argument('-D', '--debug',          action  = 'store_true',         
 parser . add_argument('-v', '--verbose',        action  = 'store_true',           help='Print extra stuff(verbose)')
 parser . add_argument('-d', '--dest',           default = '',           type=str, help='Directory to copy files to after download - default nowhere - Only works if url is also specified')
 parser . add_argument('-a', '--add-to-calibre', action  = 'store_true',           help='Add book to calibre')
+parser . add_argument('-m', '--merge',          action  = 'store_true',           help='Save chapters for a series in a single file')
 parser . add_argument('-u', '--username',       default = '',           type=str, help='MangaDex username')
 parser . add_argument('-p', '--password',       default = '',           type=str, help='MangaDex password')
 parser . add_argument('url',  nargs='?',                                type=str, help='Url of page to download - do not combine with -x/--list')
@@ -148,7 +149,7 @@ def savexml(tree, filename=xml_list):
     )
     f.write(tree_str.decode())
 
-#Zips directory int a file called zip_file
+#Zips directory into a file maned zip_file
 def zipper(dirName, zip_file):
   zip = zipfile.ZipFile(zip_file, 'w', compression=zipfile.ZIP_DEFLATED)
   root_len = len(os.path.abspath(dirName))
@@ -443,8 +444,14 @@ def function_name(chapters, series, tags, author, status):
 
     print('  Downloading chapter - {}'.format(chapter['name']))
     logger.info('Downloading chapter - {}'.format(chapter['name']))
-    f_name  = '{}{}.cbz'.format(tmpdir, re.sub('[$&\\*<>:;/]', '_', chapter['name']))
-    chapdir = tempfile.mkdtemp(dir=tmpdir)+'/'
+    f_name  = '{}{}.cbz'.format(tmpdir,
+                                re.sub('[$&\\*<>:;/]', '_', chapter['name'])
+    )
+    chapdir = os.path.join(
+      tmpdir,
+      re.sub('[$&\\*<>:;/]', '_', chapter['name']),
+    ) + '/'
+    os.makedirs(chapdir)
 
     logger.info('  Chapdir - \"{}\"'.format(chapdir))
 
@@ -471,10 +478,79 @@ def function_name(chapters, series, tags, author, status):
         return
 
 
-    zipper(chapdir, f_name)
+
+    if not args.merge or len(chapters) == 1:
+      zipper(chapdir, f_name)
+      if args.add_to_calibre:
+        add_to_calibre(
+            f_name,
+            [
+               chapter['name'],
+               series,
+               tags,
+               chapter['pages'],
+               chapter['date'],
+               author
+            ]
+        )
+
+      if dest:
+        while dest.endswith('/'):
+          dest = dest[:-1]
+        dirName = '{}/{}/'.format(dest, re.sub('[$&\\*<>:;/]', '_', series))
+        if not os.path.isdir(dirName):
+          os.makedirs(dirName)
+
+        dest_name = os.path.join(dirName, os.path.basename(f_name))
+        if os.path.exists(dest_name):
+          os.remove(dest_name)
+        shutil.move(f_name, dirName)
+
+    l=chapter['num']
+
+    if not args.debug and not args.merge:
+      shutil.rmtree(chapdir)
+    logger.debug('NOT deleting chapdir: \"%s\"', chapdir)
+
+    if not args.url:
+      elem = tree.find(f'entry[url="{url}"]')
+
+      elem.find('.//url').set('name', series)
+
+      if elem.find('.//last') is not None:
+        elem.find('.//last').text = str(l)
+      else:
+        lst = etree.SubElement(elem, 'last')
+        lst.text = str(l)
+        savexml(tree, xml_list)
+
+  if args.merge and len(chapters) > 1:
+    pat = re.compile(r' - (\d+(?:\.\d+))(\s*:|$)')
+    start_chap = pat.search(chapters[0].get('name', ''))
+    end_chap   = pat.search(chapters[-1].get('name', ''))
+
+    start_chap = start_chap.group(1) if start_chap else 'UNKNOWN'
+    end_chap   = end_chap.group(1) if end_chap else 'UNKNOWN'
+
+    f_name  = '{}{} - {}-{}.cbz'.format(tmpdir,
+                                        re.sub('[$&\\*<>:;/]', '_', series),
+                                        start_chap, end_chap,
+    )
+
+    zipper(tmpdir, f_name)
 
     if args.add_to_calibre:
-      add_to_calibre(f_name, [chapter['name'], series, tags, chapter['pages'], chapter['date'], author])
+      add_to_calibre(
+          f_name,
+          [
+             f_name.rpartition('/')[2],
+             series,
+             tags,
+             chapter[0]['pages'],
+             chapter[0]['date'],
+             author,
+          ],
+      )
 
     if dest:
       while dest.endswith('/'):
@@ -487,23 +563,6 @@ def function_name(chapters, series, tags, author, status):
       if os.path.exists(dest_name):
         os.remove(dest_name)
       shutil.move(f_name, dirName)
-
-    l=chapter['num']
-
-    if not args.debug:
-      shutil.rmtree(chapdir)
-    logger.debug('NOT deleting chapdir: \"%s\"', chapdir)
-    if not args.url:
-      elem = tree.find(f'entry[url="{url}"]')
-
-      elem.find('.//url').set('name', series)
-
-      if elem.find('.//last') is not None:
-        elem.find('.//last').text = str(l)
-      else:
-        lst = etree.SubElement(elem, 'last')
-        lst.text = str(l)
-        savexml(tree, xml_list)
 
   if not args.debug:
     try:
